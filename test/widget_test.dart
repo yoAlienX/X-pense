@@ -1,9 +1,9 @@
 // This is a basic Flutter widget test.
-
-import 'package:flutter/material.dart';
+//
+// import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:expense_tracker/main.dart';
+import 'package:x_pense/main.dart';
 
 void main() {
   testWidgets('Expense Tracker app smoke test', (WidgetTester tester) async {
@@ -11,7 +11,7 @@ void main() {
     await tester.pumpWidget(const ExpenseTrackerApp());
 
     // Verify that the app title is present
-    expect(find.text('Expense Tracker'), findsOneWidget);
+    expect(find.text('X-pense'), findsOneWidget);
     
     // Verify that the balance section is present
     expect(find.text('Current Balance'), findsOneWidget);
