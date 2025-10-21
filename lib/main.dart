@@ -49,7 +49,7 @@ class _ExpenseTrackerAppState extends State<ExpenseTrackerApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Expense Tracker',
+      title: 'X-pence', // Changed to X-pence for release
       debugShowCheckedModeBanner: false,
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
@@ -128,7 +128,9 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
   bool _selectionMode = false;
   final Set<String> _selectedIds = {};
   double globalBalance = 0.0;
-  
+  String searchQuery = '';
+  bool balanceVisible = true;
+  final TextEditingController _searchController = TextEditingController();
   final List<String> categories = [
     'Food & Dining',
     'Transportation',
@@ -173,6 +175,8 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
             type: item['type'],
             category: item['category'] ?? 'Uncategorized',
           )).toList();
+          // Sort transactions by date (newest first) after loading from storage
+          transactions.sort((a, b) => b.date.compareTo(a.date));
           globalBalance = transactions.isNotEmpty ? transactions.last.balance : 0.0;
           _applyFilters();
         });
@@ -202,11 +206,35 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
     }
   }
 
-  void _recalculateBalances() {
+  Future<void> _reconcileAndSave() async {
+    // Calculate balance as: initial balance + total income - total expense
+    final totalIncome = transactions.fold(0.0, (sum, item) => sum + item.credit);
+    final totalExpense = transactions.fold(0.0, (sum, item) => sum + item.debit);
+    
+    // Find initial balance from system transactions or use 0
+    final initialBalanceTransaction = transactions.where((t) => t.category == 'Initial Balance').fold(0.0, (sum, t) => sum + t.credit - t.debit);
+    
+    globalBalance = initialBalanceTransaction + totalIncome - totalExpense;
+    
+    // Update individual transaction balances for display purposes
+    _updateTransactionBalances();
+    
+    await _saveTransactionsToStorage();
+  }
+
+  void _updateTransactionBalances() {
+    // Sort transactions chronologically for balance calculation
     final sorted = transactions.toList()..sort((a, b) => a.date.compareTo(b.date));
     double running = 0.0;
+    
+    // Find initial balance
+    final initialBalanceTransaction = sorted.where((t) => t.category == 'Initial Balance').fold(0.0, (sum, t) => sum + t.credit - t.debit);
+    running = initialBalanceTransaction;
+    
     for (int i = 0; i < sorted.length; i++) {
-      running += sorted[i].credit - sorted[i].debit;
+      if (sorted[i].category != 'Initial Balance') {
+        running += sorted[i].credit - sorted[i].debit;
+      }
       final t = sorted[i];
       final idx = transactions.indexWhere((e) => e.id == t.id);
       if (idx != -1) {
@@ -225,12 +253,6 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
     }
   }
 
-  Future<void> _reconcileAndSave() async {
-    _recalculateBalances();
-    globalBalance = transactions.isNotEmpty ? transactions.last.balance : 0.0;
-    await _saveTransactionsToStorage();
-  }
-
   void _applyFilters() {
     setState(() {
       filteredTransactions = transactions.where((t) {
@@ -245,8 +267,16 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
         bool matchesYear = selectedYear == 'All' ||
             t.date.year.toString() == selectedYear;
         
-        return matchesType && matchesMonth && matchesYear;
-      }).toList();
+        bool matchesSearch = searchQuery.isEmpty ||
+            t.description.toLowerCase().contains(searchQuery.toLowerCase()) ||
+            t.category.toLowerCase().contains(searchQuery.toLowerCase()) ||
+            t.referenceNo.toLowerCase().contains(searchQuery.toLowerCase()) ||
+            t.debit.toString().contains(searchQuery) ||
+            t.credit.toString().contains(searchQuery);
+        
+        return matchesType && matchesMonth && matchesYear && matchesSearch;
+      }).toList()
+        ..sort((a, b) => b.date.compareTo(a.date)); // Sort by date (newest first)
     });
   }
 
@@ -257,32 +287,97 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
     return ['All', ...years.map((y) => y.toString())];
   }
 
-  Widget _buildSummaryCard(String label, double value, Color color, IconData icon) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: Colors.white, size: 24),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '₹${value.toStringAsFixed(2)}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+  void _toggleBalanceVisibility() {
+    setState(() {
+      balanceVisible = !balanceVisible;
+    });
+  }
+
+  void _showTransactionTypeDialog(bool isIncome) {
+    final filteredTypeTransactions = filteredTransactions.where((t) => 
+      isIncome ? t.credit > 0 : t.debit > 0
+    ).toList()..sort((a, b) => b.date.compareTo(a.date));
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isIncome ? 'Income Transactions' : 'Expense Transactions'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: filteredTypeTransactions.isEmpty
+            ? Center(
+                child: Text(
+                  'No ${isIncome ? 'income' : 'expense'} transactions found for selected filters',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              )
+            : ListView.builder(
+                itemCount: filteredTypeTransactions.length,
+                itemBuilder: (context, index) {
+                  final transaction = filteredTypeTransactions[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      title: Text(transaction.description),
+                      subtitle: Text(
+                        '${DateFormat('dd MMM yyyy').format(transaction.date)} • ${transaction.category}'
+                      ),
+                      trailing: Text(
+                        '₹${(isIncome ? transaction.credit : transaction.debit).toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: isIncome ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      onTap: () => _showTransactionDetails(transaction),
+                    ),
+                  );
+                },
               ),
-            ),
-          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildSummaryCard(String label, double value, Color color, IconData icon) {
+    final isIncome = label == 'Income';
+    return Expanded(
+      child: InkWell(
+        onTap: () => _showTransactionTypeDialog(isIncome),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: isIncome ? Colors.green : Colors.red, size: 24),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: const TextStyle(color: Colors.white70, fontSize: 12.36),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                balanceVisible ? '₹${value.toStringAsFixed(2)}' : '******',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 18.54,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -419,7 +514,6 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
   void _showAddTransactionDialog() {
     final _formKey = GlobalKey<FormState>();
     final descCtrl = TextEditingController();
-    final refCtrl = TextEditingController();
     final amtCtrl = TextEditingController();
     String type = 'Debit';
     String cat = categories.first;
@@ -428,43 +522,44 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add Transaction'),
-        content: StatefulBuilder(
-          builder: (context, setState) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description'), validator: (v) => v == null || v.isEmpty ? 'Required' : null),
-                const SizedBox(height: 8),
-                TextFormField(controller: refCtrl, decoration: const InputDecoration(labelText: 'Reference')),
-                const SizedBox(height: 8),
-                TextFormField(controller: amtCtrl, decoration: const InputDecoration(labelText: 'Amount'), keyboardType: TextInputType.number, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(value: type, items: ['Debit', 'Credit'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(), onChanged: (v) { if (v != null) setState(() => type = v); }),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(value: cat, items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(), onChanged: (v) { if (v != null) setState(() => cat = v); }),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: date,
-                            firstDate: DateTime(2000),
-                            lastDate: DateTime.now(),
-                          );
-                          if (picked != null) setState(() => date = picked);
-                        },
-                        icon: const Icon(Icons.calendar_today),
-                        label: Text(DateFormat('dd MMM yyyy').format(date)),
+        content: Form(
+          key: _formKey,
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Title'), validator: (v) => v == null || v.isEmpty ? 'Required' : null),
+                  const SizedBox(height: 8),
+                  TextFormField(controller: amtCtrl, decoration: const InputDecoration(labelText: 'Amount'), keyboardType: TextInputType.number, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(value: type, items: ['Debit', 'Credit'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(), onChanged: (v) { if (v != null) setState(() => type = v); }),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(value: cat, items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(), onChanged: (v) { if (v != null) setState(() => cat = v); }),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: date,
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) setState(() => date = picked);
+                          },
+                          icon: const Icon(Icons.calendar_today),
+                          label: Text(DateFormat('dd MMM yyyy').format(date)),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
         ),
         actions: [
           TextButton(
@@ -479,7 +574,7 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   date: date,
                   description: descCtrl.text,
-                  referenceNo: refCtrl.text,
+                  referenceNo: '',
                   debit: type == 'Debit' ? amount : 0.0,
                   credit: type == 'Credit' ? amount : 0.0,
                   balance: 0.0,
@@ -499,9 +594,7 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
                     type: transaction.type,
                     category: transaction.category,
                   );
-                  transactions.insert(0, newT);
-                  _recalculateBalances();
-                  globalBalance = transactions.isNotEmpty ? transactions.last.balance : 0.0;
+                  transactions.add(newT); // Add to end instead of insert(0)
                   _reconcileAndSave();
                   _applyFilters();
                 });
@@ -563,7 +656,7 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
         List<List<dynamic>> csvData = const CsvToListConverter().convert(input);
 
         setState(() {
-          transactions.clear();
+          // transactions.clear(); // Remove this line to merge instead of replace
           for (int i = 1; i < csvData.length; i++) {
             var row = csvData[i];
             try {
@@ -588,10 +681,9 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
               print('Error parsing row $i: $e');
             }
           }
+          // Sort transactions by date (newest first) after importing
+          transactions.sort((a, b) => b.date.compareTo(a.date));
           // After importing, recalculate balances and re-apply current filters
-          _recalculateBalances();
-          // store to persistent storage and update globalBalance
-          globalBalance = transactions.isNotEmpty ? transactions.last.balance : 0.0;
           _reconcileAndSave();
           _applyFilters();
         });
@@ -639,36 +731,71 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
     double totalIncome = filteredTransactions.fold(0.0, (sum, item) => sum + item.credit);
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                'Expense Tracker',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  fontSize: 20,
+        title: InkWell(
+          onTap: widget.onThemeToggle,
+          borderRadius: BorderRadius.circular(8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  'X-pense',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    fontSize: 20,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: widget.onThemeToggle,
-              borderRadius: BorderRadius.circular(8),
-              child: Icon(
+              const SizedBox(width: 8),
+              Icon(
                 Theme.of(context).brightness == Brightness.dark ? Icons.light_mode : Icons.dark_mode,
                 size: 20,
                 color: Colors.white70,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
+          // Search bar with animation
+          AnimatedSize(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            child: _selectionMode
+                ? const SizedBox.shrink()
+                : SizedBox(
+                    width: 160,
+                    height: 36,
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) {
+                        setState(() {
+                          searchQuery = value;
+                        });
+                        _applyFilters();
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search...',
+                        hintStyle: const TextStyle(color: Colors.white70, fontSize: 11),
+                        prefixIcon: const Icon(Icons.search, color: Colors.white70, size: 16),
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.2),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                  ),
+          ),
+          const SizedBox(width: 2),
           // Export options with popup menu (Feature 6)
           PopupMenuButton<String>(
             icon: const Icon(Icons.upload_file, color: Colors.white),
+            iconSize: 20,
             tooltip: 'Export Options',
             onSelected: (value) {
               if (value == 'filtered') {
@@ -703,12 +830,14 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
           // Import CSV in app bar
           IconButton(
             icon: const Icon(Icons.download_outlined, color: Colors.white),
+            iconSize: 20,
             tooltip: 'Import CSV',
             onPressed: importCSV,
           ),
           // Analytics with custom icon color
           IconButton(
             icon: const Icon(Icons.analytics_outlined, color: Colors.amber),
+            iconSize: 20,
             onPressed: () {
               if (transactions.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -798,16 +927,45 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
             ),
             child: Column(
               children: [
-                const Text(
-                  'Current Balance',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Current Balance',
+                      style: TextStyle(color: Colors.white70, fontSize: 16.48),
+                    ),
+                    Row(
+                      children: [
+                        if (transactions.isEmpty) ...[
+                          IconButton(
+                            onPressed: _showInitialBalanceDialog,
+                            icon: const Icon(
+                              Icons.edit,
+                              color: Colors.white70,
+                              size: 18,
+                            ),
+                            tooltip: 'Set Initial Balance',
+                          ),
+                        ],
+                        IconButton(
+                          onPressed: _toggleBalanceVisibility,
+                          icon: Icon(
+                            balanceVisible ? Icons.visibility : Icons.visibility_off,
+                            color: Colors.white70,
+                            size: 18,
+                          ),
+                          tooltip: balanceVisible ? 'Hide Balance' : 'Show Balance',
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '₹${globalBalance.toStringAsFixed(2)}',
-                  style: const TextStyle(
+                  balanceVisible ? '₹${globalBalance.toStringAsFixed(2)}' : '******',
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 36,
+                    fontSize: 37.08,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -960,13 +1118,18 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
                       ],
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredTransactions.length,
-                    itemBuilder: (context, index) {
-                      final transaction = filteredTransactions[index];
-                      return _buildTransactionCard(transaction);
-                    },
+                : RefreshIndicator(
+                    onRefresh: _refreshData,
+                    color: Colors.deepPurple,
+                    backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.grey[800] : Colors.white,
+                    child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: filteredTransactions.length,
+                        itemBuilder: (context, index) {
+                          final transaction = filteredTransactions[index];
+                          return _buildTransactionCard(transaction);
+                        },
+                      ),
                   ),
           ),
         ],
@@ -1092,8 +1255,6 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
                   if (value == 'delete') {
                     setState(() {
                       transactions.removeWhere((t) => t.id == transaction.id);
-                      _recalculateBalances();
-                      globalBalance = transactions.isNotEmpty ? transactions.last.balance : 0.0;
                       _reconcileAndSave();
                       _applyFilters();
                     });
@@ -1135,9 +1296,9 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextFormField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Description'), validator: (v) => v == null || v.isEmpty ? 'Required' : null),
+                    TextFormField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Title'), validator: (v) => v == null || v.isEmpty ? 'Required' : null),
                     const SizedBox(height: 8),
-                    TextFormField(controller: refCtrl, decoration: const InputDecoration(labelText: 'Reference')),
+                    TextFormField(controller: refCtrl, decoration: const InputDecoration(labelText: 'Reference'), keyboardType: TextInputType.number),
                     const SizedBox(height: 8),
                     TextFormField(controller: amtCtrl, decoration: const InputDecoration(labelText: 'Amount'), keyboardType: TextInputType.number, validator: (v) => v == null || v.isEmpty ? 'Required' : null),
                     const SizedBox(height: 8),
@@ -1268,6 +1429,72 @@ class _ExpenseTrackerHomeState extends State<ExpenseTrackerHome> {
         ],
       ),
     );
+  }
+
+  void _showInitialBalanceDialog() {
+    final balanceCtrl = TextEditingController(text: globalBalance.toStringAsFixed(2));
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Initial Balance'),
+        content: TextFormField(
+          controller: balanceCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Initial Balance (₹)',
+            prefixText: '₹',
+          ),
+          keyboardType: TextInputType.number,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final newBalance = double.tryParse(balanceCtrl.text) ?? 0.0;
+              setState(() {
+                globalBalance = newBalance;
+                // Create a special initial balance transaction if needed
+                if (transactions.isEmpty && newBalance != 0.0) {
+                  final initialTransaction = Transaction(
+                    id: 'initial_balance_${DateTime.now().millisecondsSinceEpoch}',
+                    date: DateTime.now(),
+                    description: 'Initial Balance',
+                    referenceNo: 'SYSTEM',
+                    debit: newBalance < 0 ? newBalance.abs() : 0.0,
+                    credit: newBalance > 0 ? newBalance : 0.0,
+                    balance: newBalance,
+                    type: newBalance >= 0 ? 'Credit' : 'Debit',
+                    category: 'Initial Balance',
+                  );
+                  transactions.add(initialTransaction);
+                  _saveTransactionsToStorage();
+                  _applyFilters();
+                }
+              });
+              Navigator.of(context).pop();
+            },
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _refreshData() async {
+    // Simulate network delay for smooth animation
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    // Re-load data from storage
+    await _loadTransactionsFromStorage();
+    
+    // Recalculate balances
+    _reconcileAndSave();
+    
+    // Re-apply current filters
+    _applyFilters();
   }
 }
 
