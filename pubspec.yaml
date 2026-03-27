@@ -18,6 +18,14 @@ dependencies:
   path_provider: ^2.1.1
   share_plus: ^7.2.1
   flutter_launcher_icons: ^0.14.4
+  provider: ^6.1.2
+  local_auth: ^2.3.0
+  fl_chart: ^1.1.1
+  dropdown_button2: ^2.3.9
+  crystal_navigation_bar: ^1.1.0
+  glassmorphism: ^3.0.0
+  oc_liquid_glass: ^0.2.1
+  native_glass_navbar: ^1.0.1
 
 dev_dependencies:
   flutter_test:

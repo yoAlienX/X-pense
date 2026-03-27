@@ -1,0 +1,736 @@
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../utils/constants.dart';
+import '../../viewmodels/app_lock_viewmodel.dart';
+import '../../viewmodels/transaction_viewmodel.dart';
+
+class SecuritySettingsScreen extends StatefulWidget {
+  const SecuritySettingsScreen({Key? key, this.embedInHome = false})
+    : super(key: key);
+
+  final bool embedInHome;
+
+  @override
+  State<SecuritySettingsScreen> createState() => _SecuritySettingsScreenState();
+}
+
+class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
+  final TextEditingController _setupPassController = TextEditingController();
+  final TextEditingController _setupConfirmController = TextEditingController();
+  final TextEditingController _setupAnswerOneController =
+      TextEditingController();
+  final TextEditingController _setupAnswerTwoController =
+      TextEditingController();
+
+  final TextEditingController _resetAnswerOneController =
+      TextEditingController();
+  final TextEditingController _resetAnswerTwoController =
+      TextEditingController();
+  final TextEditingController _resetPassController = TextEditingController();
+  final TextEditingController _resetConfirmController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AppLockViewModel>().refreshBiometricAvailability();
+    });
+  }
+
+  @override
+  void dispose() {
+    _setupPassController.dispose();
+    _setupConfirmController.dispose();
+    _setupAnswerOneController.dispose();
+    _setupAnswerTwoController.dispose();
+    _resetAnswerOneController.dispose();
+    _resetAnswerTwoController.dispose();
+    _resetPassController.dispose();
+    _resetConfirmController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<AppLockViewModel>();
+
+    final content = ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Passcode Lock',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  vm.passcodeEnabled
+                      ? 'Your app is protected with passcode lock.'
+                      : 'Set a passcode to protect your app data.',
+                ),
+                const SizedBox(height: 20),
+                if (!vm.passcodeEnabled)
+                  Center(
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showSetupPasscodeDialog(context, vm),
+                      icon: const Icon(Icons.lock_outline),
+                      label: const Text('Set Passcode'),
+                    ),
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () =>
+                              _showResetPasscodeDialog(context, vm),
+                          icon: const Icon(Icons.restart_alt),
+                          label: const Text('Reset Passcode'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            await vm.disablePasscode();
+                            if (!mounted) return;
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Passcode lock disabled'),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.lock_open_outlined),
+                          label: const Text('Disable'),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: SwitchListTile(
+            title: const Text('Use Biometrics'),
+            subtitle: Text(
+              vm.biometricAvailable
+                  ? 'Unlock with biometrics where supported.'
+                  : 'Biometric authentication is not available on this device.',
+            ),
+            value: vm.biometricEnabled,
+            onChanged: (!vm.passcodeEnabled)
+                ? null
+                : (enabled) async {
+                    final ok = await vm.setBiometricEnabled(enabled);
+                    if (!ok && context.mounted) {
+                      final errorMessage = vm.lastBiometricError.isEmpty
+                          ? 'Could not enable biometric unlock'
+                          : vm.lastBiometricError;
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(errorMessage)));
+                    }
+                  },
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (vm.passcodeEnabled)
+          ElevatedButton.icon(
+            onPressed: () {
+              // Defer lock transition to the next frame to avoid route
+              // mutations during the current build/gesture pipeline.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                context.read<TransactionViewModel>().forceMaskBalance();
+                vm.lockApp();
+              });
+            },
+            icon: const Icon(Icons.lock),
+            label: const Text('Lock App Now'),
+          ),
+      ],
+    );
+
+    if (widget.embedInHome) {
+      return SafeArea(top: false, child: content);
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Security')),
+      body: content,
+    );
+  }
+
+  Future<void> _showSetupPasscodeDialog(
+    BuildContext context,
+    AppLockViewModel vm,
+  ) async {
+    _setupPassController.clear();
+    _setupConfirmController.clear();
+    _setupAnswerOneController.clear();
+    _setupAnswerTwoController.clear();
+
+    String questionOne = AppLockViewModel.securityQuestionOptions.first;
+    String questionTwo = AppLockViewModel.securityQuestionOptions[1];
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        String? error;
+        final onSurface = Theme.of(ctx).colorScheme.onSurface;
+
+        InputDecoration glassInputDecoration({
+          required String label,
+          String? hint,
+        }) {
+          return InputDecoration(
+            labelText: label,
+            hintText: hint,
+            filled: true,
+            fillColor: Theme.of(
+              ctx,
+            ).colorScheme.surface.withAlpha(AppConstants.glassFillAlpha),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withAlpha(AppConstants.glassBorderAlpha),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withAlpha(AppConstants.glassBorderAlpha),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: AppConstants.primaryPurple.withAlpha(
+                  AppConstants.glassFocusAlpha,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 20,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).colorScheme.surface.withAlpha(
+                        AppConstants.glassPanelAlpha,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withAlpha(
+                          AppConstants.glassBorderAlpha,
+                        ),
+                        width: 0.8,
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(ctx).size.height * 0.72,
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppConstants.primaryPurple.withAlpha(
+                                      30,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.lock_outline,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Create Passcode Lock',
+                                  style: Theme.of(ctx).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            TextField(
+                              controller: _setupPassController,
+                              keyboardType: TextInputType.number,
+                              obscureText: true,
+                              maxLength: 12,
+                              textInputAction: TextInputAction.next,
+                              decoration: glassInputDecoration(
+                                label: 'Passcode',
+                              ).copyWith(counterText: ''),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _setupConfirmController,
+                              keyboardType: TextInputType.number,
+                              obscureText: true,
+                              maxLength: 12,
+                              textInputAction: TextInputAction.next,
+                              decoration: glassInputDecoration(
+                                label: 'Confirm passcode',
+                              ).copyWith(counterText: ''),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              initialValue: questionOne,
+                              style: TextStyle(color: onSurface),
+                              dropdownColor: Theme.of(ctx).colorScheme.surface
+                                  .withAlpha(AppConstants.glassPanelAlpha),
+                              decoration: glassInputDecoration(
+                                label: 'Security question 1',
+                              ),
+                              items: AppLockViewModel.securityQuestionOptions
+                                  .map(
+                                    (q) => DropdownMenuItem(
+                                      value: q,
+                                      child: Text(q),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) {
+                                if (v == null) return;
+                                setLocalState(() => questionOne = v);
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _setupAnswerOneController,
+                              textInputAction: TextInputAction.next,
+                              decoration: glassInputDecoration(
+                                label: 'Answer 1',
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              initialValue: questionTwo,
+                              style: TextStyle(color: onSurface),
+                              dropdownColor: Theme.of(ctx).colorScheme.surface
+                                  .withAlpha(AppConstants.glassPanelAlpha),
+                              decoration: glassInputDecoration(
+                                label: 'Security question 2',
+                              ),
+                              items: AppLockViewModel.securityQuestionOptions
+                                  .map(
+                                    (q) => DropdownMenuItem(
+                                      value: q,
+                                      child: Text(q),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) {
+                                if (v == null) return;
+                                setLocalState(() => questionTwo = v);
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _setupAnswerTwoController,
+                              textInputAction: TextInputAction.done,
+                              decoration: glassInputDecoration(
+                                label: 'Answer 2',
+                              ),
+                            ),
+                            if (error != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                error!,
+                                style: const TextStyle(
+                                  color: AppConstants.expenseRed,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () {
+                                      FocusScope.of(ctx).unfocus();
+                                      Navigator.pop(ctx);
+                                    },
+                                    child: const Text('Cancel'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      final pass = _setupPassController.text
+                                          .trim();
+                                      final confirm = _setupConfirmController
+                                          .text
+                                          .trim();
+                                      final answerOne =
+                                          _setupAnswerOneController.text.trim();
+                                      final answerTwo =
+                                          _setupAnswerTwoController.text.trim();
+
+                                      if (pass.length < 4) {
+                                        setLocalState(
+                                          () => error =
+                                              'Passcode must be at least 4 digits',
+                                        );
+                                        return;
+                                      }
+                                      if (pass != confirm) {
+                                        setLocalState(
+                                          () => error =
+                                              'Passcode confirmation does not match',
+                                        );
+                                        return;
+                                      }
+                                      if (questionOne == questionTwo) {
+                                        setLocalState(
+                                          () => error =
+                                              'Please choose two different questions',
+                                        );
+                                        return;
+                                      }
+                                      if (answerOne.isEmpty ||
+                                          answerTwo.isEmpty) {
+                                        setLocalState(
+                                          () => error =
+                                              'Please provide both security answers',
+                                        );
+                                        return;
+                                      }
+
+                                      await vm.configurePasscode(
+                                        passcode: pass,
+                                        questionOne: questionOne,
+                                        answerOne: answerOne,
+                                        questionTwo: questionTwo,
+                                        answerTwo: answerTwo,
+                                      );
+
+                                      if (ctx.mounted) {
+                                        FocusScope.of(ctx).unfocus();
+                                        Navigator.pop(ctx);
+                                      }
+
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Passcode lock enabled successfully',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: const Text('Save'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showResetPasscodeDialog(
+    BuildContext context,
+    AppLockViewModel vm,
+  ) async {
+    _resetAnswerOneController.clear();
+    _resetAnswerTwoController.clear();
+    _resetPassController.clear();
+    _resetConfirmController.clear();
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        String? error;
+        final onSurface = Theme.of(ctx).colorScheme.onSurface;
+        InputDecoration glassInputDecoration({
+          required String label,
+          String? hint,
+        }) {
+          return InputDecoration(
+            labelText: label,
+            hintText: hint,
+            filled: true,
+            fillColor: Theme.of(
+              ctx,
+            ).colorScheme.surface.withAlpha(AppConstants.glassFillAlpha),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withAlpha(AppConstants.glassBorderAlpha),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: Colors.white.withAlpha(AppConstants.glassBorderAlpha),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: AppConstants.primaryPurple.withAlpha(
+                  AppConstants.glassFocusAlpha,
+                ),
+              ),
+            ),
+          );
+        }
+
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 20,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx).colorScheme.surface.withAlpha(
+                        AppConstants.glassPanelAlpha,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withAlpha(
+                          AppConstants.glassBorderAlpha,
+                        ),
+                        width: 0.8,
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(ctx).size.height * 0.72,
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppConstants.primaryPurple.withAlpha(
+                                      30,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(Icons.lock_reset, size: 20),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Reset Passcode',
+                                  style: Theme.of(ctx).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              vm.questionOne,
+                              style: TextStyle(color: onSurface),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _resetAnswerOneController,
+                              textInputAction: TextInputAction.next,
+                              decoration: glassInputDecoration(
+                                label: 'Answer 1',
+                                hint: 'Enter answer',
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              vm.questionTwo,
+                              style: TextStyle(color: onSurface),
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _resetAnswerTwoController,
+                              textInputAction: TextInputAction.next,
+                              decoration: glassInputDecoration(
+                                label: 'Answer 2',
+                                hint: 'Enter answer',
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _resetPassController,
+                              keyboardType: TextInputType.number,
+                              obscureText: true,
+                              textInputAction: TextInputAction.next,
+                              decoration: glassInputDecoration(
+                                label: 'New passcode',
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _resetConfirmController,
+                              keyboardType: TextInputType.number,
+                              obscureText: true,
+                              textInputAction: TextInputAction.done,
+                              decoration: glassInputDecoration(
+                                label: 'Confirm passcode',
+                              ),
+                            ),
+                            if (error != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                error!,
+                                style: const TextStyle(
+                                  color: AppConstants.expenseRed,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () {
+                                      FocusScope.of(ctx).unfocus();
+                                      Navigator.pop(ctx);
+                                    },
+                                    child: const Text('Cancel'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      final newPass = _resetPassController.text
+                                          .trim();
+                                      final confirm = _resetConfirmController
+                                          .text
+                                          .trim();
+
+                                      if (newPass.length < 4) {
+                                        setLocalState(
+                                          () => error =
+                                              'Passcode must be at least 4 digits',
+                                        );
+                                        return;
+                                      }
+                                      if (newPass != confirm) {
+                                        setLocalState(
+                                          () => error =
+                                              'Passcode confirmation does not match',
+                                        );
+                                        return;
+                                      }
+
+                                      final ok = await vm
+                                          .resetPasscodeWithSecurityAnswers(
+                                            answerOne:
+                                                _resetAnswerOneController.text,
+                                            answerTwo:
+                                                _resetAnswerTwoController.text,
+                                            newPasscode: newPass,
+                                          );
+
+                                      if (!ok) {
+                                        setLocalState(
+                                          () => error =
+                                              'Security answers are incorrect',
+                                        );
+                                        return;
+                                      }
+
+                                      if (ctx.mounted) {
+                                        FocusScope.of(ctx).unfocus();
+                                        Navigator.pop(ctx);
+                                      }
+
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Passcode reset successful',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: const Text('Reset'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
