@@ -9,6 +9,7 @@ import '../../utils/constants.dart';
 import '../../utils/formatters.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
 import 'widgets/category_manager_sheet.dart';
+import '../widgets/liquid_glass_snackbar.dart';
 
 class AddTransactionScreen extends StatefulWidget {
   /// When provided the screen acts as an edit form for this transaction.
@@ -89,6 +90,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         balance: 0.0,
       );
       await vm.updateTransaction(widget.existing!.id, updated);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          LiquidGlassSnackBar(
+            context: context,
+            message: 'Transaction updated successfully',
+            type: SnackBarType.success,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
     } else {
       final t = Transaction(
         id: const Uuid().v4(),
@@ -102,9 +114,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         category: validCategory,
       );
       await vm.addTransaction(t);
-    }
 
-    if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          LiquidGlassSnackBar(
+            context: context,
+            message: 'Transaction added successfully',
+            type: SnackBarType.success,
+          ),
+        );
+        Navigator.of(context).pop();
+      }
+    }
   }
 
   @override

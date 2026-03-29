@@ -18,8 +18,17 @@ class FilterBar extends StatefulWidget {
 
 class _FilterBarState extends State<FilterBar> {
   String _selectedFilter = 'All';
-  String _selectedMonth = 'All';
-  String _selectedYear = 'All';
+  String _selectedMonth = AppConstants.monthNames[DateTime.now().month];
+  String _selectedYear = DateTime.now().year.toString();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _applyToViewModel(context.read<TransactionViewModel>());
+    });
+  }
 
   void _applyToViewModel(TransactionViewModel vm) {
     if (_selectedFilter == 'Debit') {
@@ -41,16 +50,20 @@ class _FilterBarState extends State<FilterBar> {
   }
 
   void _clearFilters(TransactionViewModel vm) {
+    final now = DateTime.now();
+    final defaultMonth = AppConstants.monthNames[now.month];
+    final defaultYear = now.year.toString();
+
     setState(() {
       _selectedFilter = 'All';
-      _selectedMonth = 'All';
-      _selectedYear = 'All';
+      _selectedMonth = defaultMonth;
+      _selectedYear = defaultYear;
     });
 
     vm.setTypeFilter('All');
     vm.setCategoryFilter('All');
-    vm.setMonthFilter('All');
-    vm.setYearFilter('All');
+    vm.setMonthFilter(defaultMonth);
+    vm.setYearFilter(defaultYear);
   }
 
   @override

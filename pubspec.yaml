@@ -24,6 +24,7 @@ dependencies:
   dropdown_button2: ^2.3.9
   crystal_navigation_bar: ^1.1.0
   glassmorphism: ^3.0.0
+  motor: ^1.1.0
   oc_liquid_glass: ^0.2.1
   native_glass_navbar: ^1.0.1
 

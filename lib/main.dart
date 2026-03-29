@@ -45,7 +45,7 @@ class ExpenseTrackerApp extends StatelessWidget {
                 debugShowCheckedModeBanner: false,
                 theme: AppTheme.light,
                 darkTheme: AppTheme.dark,
-                themeMode: themeMode,
+                themeMode: themeVm.themeMode,
                 scrollBehavior: const _FluidScrollBehavior(),
                 themeAnimationDuration: Duration.zero,
                 builder: (context, child) {

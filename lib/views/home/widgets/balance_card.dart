@@ -7,6 +7,7 @@ import '../../../utils/constants.dart';
 import '../../../utils/formatters.dart';
 import '../../../viewmodels/transaction_viewmodel.dart';
 import '../../../viewmodels/theme_viewmodel.dart';
+import '../../widgets/random_masking_text.dart';
 
 class BalanceCard extends StatelessWidget {
   /// Called when the user taps the income or expense summary tile.
@@ -79,10 +80,9 @@ class BalanceCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             // Balance amount
-            Text(
-              vm.balanceVisible
-                  ? Formatters.currency(vm.currentBalance)
-                  : Formatters.maskedBalance(),
+            RandomMaskingText(
+              text: Formatters.currency(vm.currentBalance),
+              obscured: !vm.balanceVisible,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 36,
@@ -223,10 +223,9 @@ class _SummaryTile extends StatelessWidget {
                 style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 4),
-              Text(
-                visible
-                    ? Formatters.currency(amount)
-                    : Formatters.maskedBalance(),
+              RandomMaskingText(
+                text: Formatters.currency(amount),
+                obscured: !visible,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,

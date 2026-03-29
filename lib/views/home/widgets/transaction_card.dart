@@ -27,6 +27,9 @@ class TransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDebit = transaction.isExpense;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selectedBg = isDark
+        ? AppConstants.primaryPurple.withAlpha(58)
+        : AppConstants.primaryPurple.withAlpha(30);
 
     final iconBg = selected
         ? Colors.blue.shade50
@@ -34,9 +37,7 @@ class TransactionCard extends StatelessWidget {
     final iconColor = selected
         ? Colors.blue
         : (isDebit ? AppConstants.expenseRed : AppConstants.incomeGreen);
-    final iconData = selected
-        ? Icons.check
-        : (isDebit ? Icons.arrow_upward : Icons.arrow_downward);
+    final iconData = isDebit ? Icons.arrow_upward : Icons.arrow_downward;
     final categoryBg = isDark
         ? const Color(0xFF273142)
         : const Color(0xFFE8EEFF);
@@ -46,6 +47,17 @@ class TransactionCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
+      color: selected ? selectedBg : null,
+      elevation: selected ? 3 : null,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+        side: selected
+            ? BorderSide(
+                color: AppConstants.primaryPurple.withAlpha(175),
+                width: 1.1,
+              )
+            : BorderSide.none,
+      ),
       child: InkWell(
         onTap: onTap,
         onLongPress: onLongPress,
@@ -128,6 +140,18 @@ class TransactionCard extends StatelessWidget {
                       : AppConstants.incomeGreen,
                 ),
               ),
+              if (selectionMode) ...[
+                const SizedBox(width: 8),
+                Icon(
+                  selected
+                      ? Icons.check_circle_rounded
+                      : Icons.radio_button_unchecked_rounded,
+                  size: 20,
+                  color: selected
+                      ? AppConstants.primaryPurple
+                      : AppConstants.greyText,
+                ),
+              ],
               if (!selectionMode) ...[
                 const SizedBox(width: 2),
                 PopupMenuButton<String>(

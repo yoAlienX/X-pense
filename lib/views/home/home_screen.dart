@@ -18,6 +18,7 @@ import '../../views/home/widgets/transaction_card.dart';
 import '../../views/transaction/add_transaction_screen.dart';
 import '../../views/transaction/transaction_detail_screen.dart';
 import '../../views/widgets/theme_switcher.dart';
+import '../../views/widgets/liquid_glass_snackbar.dart';
 
 // ─── Tab indices ──────────────────────────────────────────────────────────────
 const int _kTabTransactions = 0;
@@ -105,15 +106,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return PopScope(
-      canPop:
-          !selectionMode &&
-          _currentTab == _kTabTransactions &&
-          _tabHistory.isEmpty,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
 
         if (selectionMode) {
           context.read<TransactionViewModel>().clearSelection();
+          return;
+        }
+
+        // If on home screen with no history, show exit confirmation
+        if (_currentTab == _kTabTransactions && _tabHistory.isEmpty) {
+          _handleExitPress(context);
           return;
         }
 
@@ -141,14 +145,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   parent: AlwaysScrollableScrollPhysics(),
                 ),
                 onPageChanged: (index) {
-                  if (_isTabTransitioning) {
-                    return;
-                  }
-                  if (!_isProgrammaticPageChange && _currentTab != index) {
-                    _pushTabHistory(_currentTab);
-                  }
                   if (_currentTab != index) {
+                    // Always update _currentTab after page settles.
+                    // This prevents navbar animation repetition by ensuring it plays only once.
                     setState(() => _currentTab = index);
+
+                    // Only track history for gesture-based (non-programmatic) changes
+                    if (!_isProgrammaticPageChange) {
+                      _pushTabHistory(_currentTab);
+                    }
                   }
                 },
                 children: [
@@ -211,10 +216,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _isProgrammaticPageChange = true;
     _isTabTransitioning = true;
-
-    if (mounted) {
-      setState(() => _currentTab = index);
-    }
 
     try {
       final isNonAdjacentHop = (fromIndex - index).abs() > 1;
@@ -638,13 +639,36 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (action == 'delete') {
                               _confirmDelete(context, vm, {t.id});
                             } else if (action == 'edit') {
+                              // Fade out FAB before navigating
+                              setState(() => _showCreateButton = false);
+
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      AddTransactionScreen(existing: t),
+                                PageRouteBuilder(
+                                  pageBuilder:
+                                      (
+                                        context,
+                                        animation,
+                                        secondaryAnimation,
+                                      ) => AddTransactionScreen(existing: t),
+                                  transitionsBuilder:
+                                      (
+                                        context,
+                                        animation,
+                                        secondaryAnimation,
+                                        child,
+                                      ) => FadeTransition(
+                                        opacity: animation,
+                                        child: child,
+                                      ),
+                                  transitionDuration: const Duration(
+                                    milliseconds: 260,
+                                  ),
                                 ),
-                              );
+                              ).then((_) {
+                                // Fade in FAB when returning
+                                setState(() => _showCreateButton = true);
+                              });
                             }
                           },
                         ),
@@ -854,6 +878,105 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // ── Handle exit button press ───────────────────────────────────────────────
+
+  void _handleExitPress(BuildContext context) {
+    // Fire the async dialog without blocking
+    _showExitConfirmationDialog(context);
+  }
+
+  // ── Exit confirmation dialog ───────────────────────────────────────────────
+
+  Future<void> _showExitConfirmationDialog(BuildContext context) async {
+    final panelColor = Theme.of(
+      context,
+    ).colorScheme.surface.withAlpha(AppConstants.glassPanelAlpha);
+    final borderColor = Colors.white.withAlpha(AppConstants.glassBorderAlpha);
+
+    final shouldExit = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 20,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: panelColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: borderColor, width: 0.8),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppConstants.primaryPurple.withAlpha(30),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.exit_to_app_outlined,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Exit App',
+                          style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Are you sure you want to exit the app?'),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('Cancel'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppConstants.expenseRed,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Exit'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (shouldExit == true && context.mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   // ── Export choice dialog ───────────────────────────────────────────────────
 
   Future<void> _showExportDialog(
@@ -923,16 +1046,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: TextButton(
-                            style: TextButton.styleFrom(
-                              foregroundColor: AppConstants.expenseRed,
-                            ),
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('Cancel'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
                           child: OutlinedButton.icon(
                             style: OutlinedButton.styleFrom(
                               foregroundColor: exportFilteredColor,
@@ -945,15 +1058,26 @@ class _HomeScreenState extends State<HomeScreen> {
                             onPressed: () => Navigator.pop(ctx, 'filtered'),
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.backup_outlined, size: 18),
+                            label: const Text('Export All'),
+                            onPressed: () => Navigator.pop(ctx, 'all'),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.backup_outlined, size: 18),
-                        label: const Text('Export All'),
-                        onPressed: () => Navigator.pop(ctx, 'all'),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppConstants.expenseRed,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Cancel'),
                       ),
                     ),
                   ],
@@ -1288,9 +1412,19 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppConstants.expenseRed,
                         ),
-                        onPressed: () {
-                          vm.deleteMultipleTransactions(ids);
+                        onPressed: () async {
+                          await vm.deleteMultipleTransactions(ids);
                           Navigator.pop(ctx);
+
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              LiquidGlassSnackBar(
+                                context: context,
+                                message: '${ids.length} transaction(s) deleted',
+                                type: SnackBarType.success,
+                              ),
+                            );
+                          }
                         },
                         child: const Text('Delete'),
                       ),
@@ -1318,18 +1452,20 @@ class _HomeScreenState extends State<HomeScreen> {
       await vm.addMultipleTransactions(parsed);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Imported ${parsed.length} transactions'),
-            backgroundColor: Colors.green,
+          LiquidGlassSnackBar(
+            context: context,
+            message: 'Imported ${parsed.length} transactions',
+            type: SnackBarType.success,
           ),
         );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Import failed: $e'),
-            backgroundColor: AppConstants.expenseRed,
+          LiquidGlassSnackBar(
+            context: context,
+            message: 'Import failed: $e',
+            type: SnackBarType.error,
           ),
         );
       }
@@ -1349,9 +1485,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (txs.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No transactions to export'),
-          backgroundColor: Colors.orange,
+        LiquidGlassSnackBar(
+          context: context,
+          message: 'No transactions to export',
+          type: SnackBarType.warning,
         ),
       );
       return;
@@ -1372,9 +1509,10 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Export failed: $e'),
-            backgroundColor: AppConstants.expenseRed,
+          LiquidGlassSnackBar(
+            context: context,
+            message: 'Export failed: $e',
+            type: SnackBarType.error,
           ),
         );
       }
