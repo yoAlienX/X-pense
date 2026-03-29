@@ -153,6 +153,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
 
   int _prevIndex = 0;
   int _tapIndex = -1;
+  bool _skipNextPillAnimation = false;
 
   @override
   void initState() {
@@ -182,8 +183,15 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
   void didUpdateWidget(LiquidGlassNavBar old) {
     super.didUpdateWidget(old);
     if (old.currentIndex != widget.currentIndex) {
-      _prevIndex = old.currentIndex;
-      _pillController.forward(from: 0);
+      // Skip animation restart if we just completed a drag-release
+      // (the pill already animated to position via release animation)
+      if (_skipNextPillAnimation) {
+        _skipNextPillAnimation = false;
+        _prevIndex = widget.currentIndex;
+      } else {
+        _prevIndex = old.currentIndex;
+        _pillController.forward(from: 0);
+      }
     }
   }
 
@@ -192,6 +200,10 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
     _pillController.dispose();
     _tapController.dispose();
     super.dispose();
+  }
+
+  void _onTabRowDragReleaseComplete() {
+    _skipNextPillAnimation = true;
   }
 
   void _onTap(int index) {
@@ -277,6 +289,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
                     animDuration: cfg.animationDuration,
                     isDark: isDark,
                     onTap: _onTap,
+                    onDragReleaseComplete: _onTabRowDragReleaseComplete,
                   ),
                 ),
               ),
@@ -472,6 +485,7 @@ class _TabRow extends StatefulWidget {
     required this.animDuration,
     required this.isDark,
     required this.onTap,
+    this.onDragReleaseComplete,
   });
 
   final List<LiquidGlassNavItem> items;
@@ -487,13 +501,14 @@ class _TabRow extends StatefulWidget {
   final Duration animDuration;
   final bool isDark;
   final ValueChanged<int> onTap;
+  final VoidCallback? onDragReleaseComplete;
 
   @override
   State<_TabRow> createState() => _TabRowState();
 }
 
 class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
-  static const Duration _kDragHoldDuration = Duration(milliseconds: 60);
+  static const Duration _kDragHoldDuration = Duration(milliseconds: 300);
 
   late final AnimationController _holdController;
   late final Animation<double> _holdAnim;
@@ -535,6 +550,8 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
   void didUpdateWidget(covariant _TabRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_pendingIndex != null && widget.currentIndex == _pendingIndex) {
+      // We just completed a drag-release. Signal parent to skip pill animation.
+      widget.onDragReleaseComplete?.call();
       _pendingIndex = null;
     }
   }

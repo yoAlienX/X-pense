@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../viewmodels/transaction_viewmodel.dart';
+import '../../widgets/liquid_glass_snackbar.dart';
 
 Future<void> showCategoryManagerSheet(BuildContext context) {
   return showModalBottomSheet<void>(
@@ -34,7 +35,11 @@ class _CategoryManagerSheetState extends State<_CategoryManagerSheet> {
 
     if (vm.categories.contains(text)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Category already exists')),
+        LiquidGlassSnackBar(
+          context: context,
+          message: 'Category already exists',
+          type: SnackBarType.warning,
+        ),
       );
       return;
     }
@@ -128,6 +133,15 @@ class _CategoryManagerSheetState extends State<_CategoryManagerSheet> {
                             ? null
                             : () async {
                                 await vm.deleteCategory(category);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    LiquidGlassSnackBar(
+                                      context: context,
+                                      message: 'Category "$category" deleted',
+                                      type: SnackBarType.success,
+                                    ),
+                                  );
+                                }
                               },
                         icon: const Icon(Icons.delete_outline),
                         tooltip: 'Delete category',

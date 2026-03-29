@@ -14,7 +14,10 @@ class TransactionViewModel extends ChangeNotifier {
   List<Transaction> _filteredTransactions = [];
 
   // UI State
-  FilterState _filterState = const FilterState();
+  FilterState _filterState = FilterState(
+    monthFilter: AppConstants.monthNames[DateTime.now().month],
+    yearFilter: DateTime.now().year.toString(),
+  );
   SelectionState _selectionState = const SelectionState();
   bool _balanceVisible = false;
   bool _isLoading = false;
@@ -458,9 +461,10 @@ class TransactionViewModel extends ChangeNotifier {
 
   // Get available years for filtering
   List<String> getAvailableYears() {
-    final years =
-        _allTransactions.map((t) => t.year.toString()).toSet().toList()
-          ..sort((a, b) => b.compareTo(a));
-    return ['All', ...years];
+    final years = _allTransactions.map((t) => t.year.toString()).toSet();
+    years.add(DateTime.now().year.toString());
+
+    final sortedYears = years.toList()..sort((a, b) => b.compareTo(a));
+    return ['All', ...sortedYears];
   }
 }

@@ -1,0 +1,8 @@
+Ok. I have a really better UI look for the PieChart set up in the Analytics page of the app, I will share the code for this page so that you can refer and look into this. I need to change the PieChart setup to a Doughnut Chart setup. (The current chart in Analytics page looks like a doughnut and has gesture detection but is not optimised)
+
+For reference of this, I will share some screenshots for the new UI look along with a screenrecording video of the doughnut chart concept that I have. The doughtnut chart concept is actually the animated doughnut chart in Telegram app's Data and Storage's Storage Usage chart.
+
+Also, an additional concept is in my mind, the concept is to implement the line chart as an additional chart option which can be viewed from the analytics page on tapping a button in the expense breakdown section's top right corner.
+The line chart offers following insights:
+    1. Shows daily expense in a week 'by default' for the current month (that is, for mondays, tuesdays ..... sundays)
+    2. Can also toggle to show monthly expense in a year.

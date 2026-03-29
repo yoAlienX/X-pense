@@ -3,9 +3,13 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/csv_service.dart';
 import '../../utils/constants.dart';
 import '../../viewmodels/app_lock_viewmodel.dart';
+import '../../viewmodels/theme_viewmodel.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
+import '../widgets/liquid_glass_snackbar.dart';
+import '../widgets/radial_theme_switch.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   const SecuritySettingsScreen({Key? key, this.embedInHome = false})
@@ -103,12 +107,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () async {
-                            final messenger = ScaffoldMessenger.of(context);
                             await vm.disablePasscode();
-                            if (!mounted) return;
-                            messenger.showSnackBar(
-                              const SnackBar(
-                                content: Text('Passcode lock disabled'),
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              LiquidGlassSnackBar(
+                                context: context,
+                                message: 'Passcode lock disabled',
+                                type: SnackBarType.success,
                               ),
                             );
                           },
@@ -140,9 +145,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       final errorMessage = vm.lastBiometricError.isEmpty
                           ? 'Could not enable biometric unlock'
                           : vm.lastBiometricError;
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text(errorMessage)));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        LiquidGlassSnackBar(
+                          context: context,
+                          message: errorMessage,
+                          type: SnackBarType.error,
+                        ),
+                      );
                     }
                   },
           ),
@@ -162,6 +171,214 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
             icon: const Icon(Icons.lock),
             label: const Text('Lock App Now'),
           ),
+        const SizedBox(height: 20),
+        // ── Theme Section ─────────────────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Appearance',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Consumer<ThemeViewModel>(
+                  builder: (context, themeVm, _) {
+                    return RadialThemeSwitch(themeViewModel: themeVm);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        // ── CSV Section ───────────────────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Data Management',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Import or export your transactions',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final txVm = context.read<TransactionViewModel>();
+                          try {
+                            final csvService = CsvService();
+                            final parsed = await csvService.importFromFile();
+                            if (parsed == null) return;
+                            await txVm.addMultipleTransactions(parsed);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                LiquidGlassSnackBar(
+                                  context: context,
+                                  message:
+                                      'Imported ${parsed.length} transactions',
+                                  type: SnackBarType.success,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                LiquidGlassSnackBar(
+                                  context: context,
+                                  message: 'Import failed: $e',
+                                  type: SnackBarType.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.download_outlined),
+                        label: const Text('Import CSV'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final txVm = context.read<TransactionViewModel>();
+                          try {
+                            final csvService = CsvService();
+                            await csvService.exportAndShare(
+                              txVm.allTransactions.toList(),
+                              isBackup: true,
+                              subject: 'Expense Tracker Full Backup',
+                              text:
+                                  'Complete backup of ${txVm.allTransactions.length} transactions.',
+                            );
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                LiquidGlassSnackBar(
+                                  context: context,
+                                  message: 'Export failed: $e',
+                                  type: SnackBarType.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.upload_outlined),
+                        label: const Text('Export CSV'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        // ── Clear All Data Section ────────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Data & Storage',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Permanently delete all transactions and data',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppConstants.expenseRed,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () async {
+                      final shouldClear = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) {
+                          return AlertDialog(
+                            title: const Text('Clear All Data?'),
+                            content: const Text(
+                              'This will permanently delete all your transactions and data. This action cannot be undone.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(ctx, false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppConstants.expenseRed,
+                                ),
+                                onPressed: () => Navigator.pop(ctx, true),
+                                child: const Text('Delete All'),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+
+                      if (shouldClear == true && mounted) {
+                        try {
+                          final txVm = context.read<TransactionViewModel>();
+                          await txVm.clearAllTransactions();
+
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              LiquidGlassSnackBar(
+                                context: context,
+                                message:
+                                    'All data has been cleared successfully',
+                                type: SnackBarType.success,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              LiquidGlassSnackBar(
+                                context: context,
+                                message: 'Failed to clear data: $e',
+                                type: SnackBarType.error,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.delete_forever_outlined),
+                    label: const Text('Clear All Data'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        // ── Lock App Section ───────────────────────────────────────────────
       ],
     );
 
@@ -453,10 +670,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Passcode lock enabled successfully',
-                                            ),
+                                          LiquidGlassSnackBar(
+                                            context: context,
+                                            message:
+                                                'Passcode lock enabled successfully',
+                                            type: SnackBarType.success,
                                           ),
                                         );
                                       }
@@ -707,10 +925,11 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Passcode reset successful',
-                                            ),
+                                          LiquidGlassSnackBar(
+                                            context: context,
+                                            message:
+                                                'Passcode reset successful',
+                                            type: SnackBarType.success,
                                           ),
                                         );
                                       }

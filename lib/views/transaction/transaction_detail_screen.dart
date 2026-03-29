@@ -8,6 +8,7 @@ import '../../utils/constants.dart';
 import '../../utils/formatters.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
 import 'widgets/category_manager_sheet.dart';
+import '../widgets/liquid_glass_snackbar.dart';
 
 /// Show this as a modal bottom sheet via [showTransactionDetail].
 class TransactionDetailSheet extends StatelessWidget {
@@ -239,6 +240,17 @@ class TransactionDetailSheet extends StatelessWidget {
                     context
                         .read<TransactionViewModel>()
                         .updateTransactionCategory(transaction.id, v);
+
+                    // Show success notification
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        LiquidGlassSnackBar(
+                          context: context,
+                          message: 'Transaction updated',
+                          type: SnackBarType.success,
+                        ),
+                      );
+                    }
                   }
                 },
               ),

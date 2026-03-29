@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:provider/provider.dart';
 
@@ -7,6 +6,8 @@ import '../../models/transaction.dart';
 import '../../utils/constants.dart';
 import '../../utils/formatters.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
+import 'widgets/interactive_donut_chart.dart';
+import 'widgets/zero_expense_chart.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({Key? key, this.embedInHome = false}) : super(key: key);
@@ -22,6 +23,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   String _selectedYear = 'All';
   int _selectedCategoryIndex = -1;
   bool _animatePieIn = false;
+  final Set<String> _hiddenCategories = <String>{};
+  final ScrollController _legendScrollController = ScrollController();
 
   @override
   void initState() {
@@ -36,10 +39,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _legendScrollController.dispose();
+    super.dispose();
+  }
+
   List<String> _availableYears(List<Transaction> all) {
-    final years = all.map((t) => t.date.year.toString()).toSet().toList()
-      ..sort((a, b) => b.compareTo(a));
-    return ['All', ...years];
+    final years = all.map((t) => t.date.year.toString()).toSet();
+    years.add(DateTime.now().year.toString());
+
+    final sortedYears = years.toList()..sort((a, b) => b.compareTo(a));
+    return ['All', ...sortedYears];
   }
 
   @override
@@ -51,12 +62,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     final availableYears = _availableYears(allTx);
 
     final monthItems = <String>{...AppConstants.monthNames}.toList();
+    final defaultMonth = AppConstants.monthNames[DateTime.now().month];
+    final defaultYear = DateTime.now().year.toString();
+
     final safeMonth = monthItems.contains(_selectedMonth)
         ? _selectedMonth
-        : (monthItems.contains('All') ? 'All' : monthItems.first);
+        : (monthItems.contains(defaultMonth) ? defaultMonth : monthItems.first);
     final safeYear = availableYears.contains(_selectedYear)
         ? _selectedYear
-        : (availableYears.contains('All') ? 'All' : availableYears.first);
+        : (availableYears.contains(defaultYear)
+              ? defaultYear
+              : availableYears.first);
 
     final filtered = allTx.where((t) {
       final matchMonth =
@@ -85,14 +101,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
     final sorted = categoryExp.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (_selectedCategoryIndex >= sorted.length) {
+      _selectedCategoryIndex = -1;
+    }
+
     final totalExp = sorted.fold(0.0, (s, e) => s + e.value);
     final totalInc = filtered.fold(0.0, (s, t) => s + t.credit);
 
     final content = Column(
       children: [
         Container(
-          margin: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(
@@ -106,59 +127,30 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ],
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 350;
-              if (compact) {
-                return Column(
-                  children: [
-                    _buildDropdown(
-                      label: 'Month',
-                      value: safeMonth,
-                      items: monthItems,
-                      onChanged: (v) {
-                        if (v != null) setState(() => _selectedMonth = v);
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    _buildDropdown(
-                      label: 'Year',
-                      value: safeYear,
-                      items: availableYears,
-                      onChanged: (v) {
-                        if (v != null) setState(() => _selectedYear = v);
-                      },
-                    ),
-                  ],
-                );
-              }
-
-              return Row(
-                children: [
-                  Expanded(
-                    child: _buildDropdown(
-                      label: 'Month',
-                      value: safeMonth,
-                      items: monthItems,
-                      onChanged: (v) {
-                        if (v != null) setState(() => _selectedMonth = v);
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildDropdown(
-                      label: 'Year',
-                      value: safeYear,
-                      items: availableYears,
-                      onChanged: (v) {
-                        if (v != null) setState(() => _selectedYear = v);
-                      },
-                    ),
-                  ),
-                ],
-              );
-            },
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildDropdown(
+                  label: 'Month',
+                  value: safeMonth,
+                  items: monthItems,
+                  onChanged: (v) {
+                    if (v != null) setState(() => _selectedMonth = v);
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildDropdown(
+                  label: 'Year',
+                  value: safeYear,
+                  items: availableYears,
+                  onChanged: (v) {
+                    if (v != null) setState(() => _selectedYear = v);
+                  },
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(
@@ -187,10 +179,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         const SizedBox(height: 12),
                         if (sorted.isEmpty)
                           const Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Center(
-                              child: Text('No expenses in selected period'),
-                            ),
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Center(child: ZeroExpenseChart()),
                           )
                         else
                           AnimatedSwitcher(
@@ -436,6 +426,90 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildPieView(List<MapEntry<String, double>> sorted, double totalExp) {
+    final visibleTotal = sorted
+        .where((entry) => !_hiddenCategories.contains(entry.key))
+        .fold<double>(0.0, (sum, entry) => sum + entry.value);
+
+    final legendRows = sorted.asMap().entries.map((me) {
+      final idx = me.key;
+      final entry = me.value;
+      final visible = !_hiddenCategories.contains(entry.key);
+      final pct = visibleTotal > 0 ? entry.value / visibleTotal * 100 : 0.0;
+      final color =
+          AppConstants.chartColors[idx % AppConstants.chartColors.length];
+
+      return GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedCategoryIndex = _selectedCategoryIndex == idx ? -1 : idx;
+          });
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+          decoration: BoxDecoration(
+            color: _selectedCategoryIndex == idx
+                ? color.withAlpha(50)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: visible ? Colors.transparent : AppConstants.greyText,
+              width: visible ? 0 : 0.8,
+            ),
+          ),
+          child: Row(
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () {
+                  setState(() {
+                    if (visible) {
+                      _hiddenCategories.add(entry.key);
+                      if (_selectedCategoryIndex == idx) {
+                        _selectedCategoryIndex = -1;
+                      }
+                    } else {
+                      _hiddenCategories.remove(entry.key);
+                    }
+                  });
+                },
+                child: Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: visible ? color : Colors.transparent,
+                    border: visible ? null : Border.all(color: color, width: 2),
+                  ),
+                  child: visible
+                      ? const Icon(Icons.check, size: 12, color: Colors.white)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  entry.key,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: visible ? null : AppConstants.greyText,
+                  ),
+                ),
+              ),
+              Text(
+                '${Formatters.currency(entry.value)} (${Formatters.percentage(pct)})',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: visible ? null : AppConstants.greyText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+
     return Column(
       children: [
         LayoutBuilder(
@@ -448,86 +522,55 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: SizedBox(
                   width: chartSize,
                   height: chartSize,
-                  child: PieChart(
-                    PieChartData(
-                      pieTouchData: PieTouchData(
-                        enabled: true,
-                        touchCallback: (event, response) {
-                          if (response == null ||
-                              response.touchedSection == null) {
-                            return;
-                          }
-                          final idx =
-                              response.touchedSection!.touchedSectionIndex;
-                          setState(() {
-                            _selectedCategoryIndex =
-                                _selectedCategoryIndex == idx ? -1 : idx;
-                          });
-                        },
-                      ),
-                      sectionsSpace: 3,
-                      centerSpaceRadius: chartSize * 0.22,
-                      centerSpaceColor: Theme.of(context).cardColor,
-                      startDegreeOffset: -90,
-                      sections: sorted.asMap().entries.map((me) {
-                        final idx = me.key;
-                        final entry = me.value;
-                        final color = AppConstants
-                            .chartColors[idx % AppConstants.chartColors.length];
-                        final pct = totalExp > 0
-                            ? (entry.value / totalExp) * 100
-                            : 0.0;
-                        final selected = idx == _selectedCategoryIndex;
-
-                        return PieChartSectionData(
-                          value: _animatePieIn ? entry.value : 0,
-                          color: color,
-                          radius: selected
-                              ? chartSize * 0.28
-                              : chartSize * 0.24,
-                          title: '${pct.toStringAsFixed(pct >= 10 ? 0 : 1)}%',
-                          titleStyle: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: selected ? 11 : 9,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withAlpha(90),
-                                blurRadius: 4,
+                  child: InteractiveDonutChart(
+                    size: chartSize,
+                    strokeWidth: chartSize * 0.22,
+                    selectedIndex: _selectedCategoryIndex,
+                    onSelected: (idx) {
+                      setState(() {
+                        _selectedCategoryIndex = _selectedCategoryIndex == idx
+                            ? -1
+                            : idx;
+                      });
+                    },
+                    segments: sorted.asMap().entries.map((me) {
+                      final idx = me.key;
+                      final entry = me.value;
+                      final color = AppConstants
+                          .chartColors[idx % AppConstants.chartColors.length];
+                      return DonutSegment(
+                        label: entry.key,
+                        value: _animatePieIn ? entry.value : 0,
+                        color: color,
+                        enabled: !_hiddenCategories.contains(entry.key),
+                      );
+                    }).toList(),
+                    centerBuilder: (context, total) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              Formatters.currency(total),
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
                               ),
-                            ],
+                              textAlign: TextAlign.center,
+                            ),
                           ),
-                          badgeWidget: selected
-                              ? Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).cardColor,
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withAlpha(30),
-                                        blurRadius: 6,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Text(
-                                    Formatters.currency(entry.value),
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                )
-                              : null,
-                          badgePositionPercentageOffset: 1.16,
-                        );
-                      }).toList(),
-                    ),
-                    duration: const Duration(milliseconds: 900),
-                    curve: Curves.easeOutQuart,
+                          const SizedBox(height: 2),
+                          Text(
+                            'Total Expense',
+                            style: TextStyle(
+                              color: AppConstants.greyText,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
@@ -535,59 +578,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           },
         ),
         const SizedBox(height: 16),
-        ...sorted.asMap().entries.map((me) {
-          final idx = me.key;
-          final entry = me.value;
-          final pct = totalExp > 0 ? entry.value / totalExp * 100 : 0.0;
-          final color =
-              AppConstants.chartColors[idx % AppConstants.chartColors.length];
-
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedCategoryIndex = _selectedCategoryIndex == idx
-                    ? -1
-                    : idx;
-              });
-            },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-              decoration: BoxDecoration(
-                color: _selectedCategoryIndex == idx
-                    ? color.withAlpha(50)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      entry.key,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  Text(
-                    '${Formatters.currency(entry.value)} (${Formatters.percentage(pct)})',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+        if (legendRows.length > 6)
+          SizedBox(
+            height: 340,
+            child: Scrollbar(
+              controller: _legendScrollController,
+              thumbVisibility: true,
+              child: ListView.builder(
+                controller: _legendScrollController,
+                itemCount: legendRows.length,
+                itemBuilder: (context, index) => legendRows[index],
               ),
             ),
-          );
-        }),
+          )
+        else
+          ...legendRows,
       ],
     );
   }
