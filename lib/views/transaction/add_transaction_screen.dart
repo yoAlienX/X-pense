@@ -29,6 +29,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   late String _type; // 'Debit' or 'Credit'
   late String _category;
+  late String _account;
   late DateTime _date;
 
   bool get _isEdit => widget.existing != null;
@@ -47,6 +48,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
     _type = t != null ? (t.debit > 0 ? 'Debit' : 'Credit') : 'Debit';
     _category = t?.category ?? vm.defaultCategory;
+    _account = t?.account ?? (vm.accounts.isNotEmpty ? vm.accounts.first : 'Canara Bank');
     _date = t?.date ?? DateTime.now();
   }
 
@@ -66,6 +68,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final validCategory = vm.categories.contains(_category)
         ? _category
         : vm.defaultCategory;
+    final validAccount = vm.accounts.contains(_account) ? _account : (vm.accounts.isNotEmpty ? vm.accounts.first : 'Canara Bank');
     final now = DateTime.now();
     final effectiveDate = DateTime(
       _date.year,
@@ -87,11 +90,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         credit: _type == 'Credit' ? amount : 0.0,
         type: _type,
         category: validCategory,
+        account: validAccount,
         balance: 0.0,
       );
       await vm.updateTransaction(widget.existing!.id, updated);
 
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -112,10 +117,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         balance: 0.0,
         type: _type,
         category: validCategory,
+        account: validAccount,
       );
       await vm.addTransaction(t);
 
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -332,6 +339,61 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   onChanged: (v) {
                     if (v != null) setState(() => _category = v);
                   },
+                ),
+                const SizedBox(height: 20),
+
+                // Account
+                const _SectionLabel('Account'),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: vm.accounts.length,
+                    itemBuilder: (context, index) {
+                      final account = vm.accounts[index];
+                      final isSelected = account == _account;
+                      return GestureDetector(
+                        onTap: () => setState(() => _account = account),
+                        child: Container(
+                          width: 140,
+                          margin: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppConstants.primaryPurple.withAlpha(50)
+                                : Theme.of(context).colorScheme.surface,
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppConstants.primaryPurple
+                                  : Colors.grey.withAlpha(80),
+                              width: isSelected ? 2 : 1,
+                            ),
+                            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.account_balance_wallet_outlined,
+                                color: isSelected ? AppConstants.primaryPurple : Colors.grey,
+                              ),
+                              const Spacer(),
+                              Text(
+                                account,
+                                style: TextStyle(
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
                 const SizedBox(height: 20),
 

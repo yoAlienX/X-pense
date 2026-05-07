@@ -24,6 +24,8 @@ class TransactionViewModel extends ChangeNotifier {
   double _currentBalance = 0.0;
   List<String> _categories = List<String>.from(AppConstants.categories);
   String _defaultCategory = 'Uncategorized';
+  List<String> _accounts = ['Canara Bank'];
+  bool _showTotalBalance = false;
 
   // Getters
   List<Transaction> get allTransactions => List.unmodifiable(_allTransactions);
@@ -35,6 +37,8 @@ class TransactionViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   List<String> get categories => List.unmodifiable(_categories);
   String get defaultCategory => _defaultCategory;
+  List<String> get accounts => List.unmodifiable(_accounts);
+  bool get showTotalBalance => _showTotalBalance;
 
   // ==================== FIXED BALANCE CALCULATION ====================
 
@@ -94,6 +98,13 @@ class TransactionViewModel extends ChangeNotifier {
         _defaultCategory = _categories.first;
       }
 
+      _accounts = _storage.getAccounts() ?? ['Canara Bank'];
+      if (_accounts.isEmpty) {
+        _accounts = ['Canara Bank'];
+      }
+
+      _showTotalBalance = _storage.getShowTotalBalance();
+
       // Apply initial filters
       _applyFilters();
     } catch (e) {
@@ -121,13 +132,15 @@ class TransactionViewModel extends ChangeNotifier {
     final chronological = _allTransactions.toList()
       ..sort((a, b) => a.date.compareTo(b.date));
 
-    // Calculate running balance
-    double runningBalance = 0.0;
+    // Calculate running balance per account
+    Map<String, double> runningBalances = {};
 
     for (var txn in chronological) {
+      double currentAccBal = runningBalances[txn.account] ?? 0.0;
       // Update running balance: add credits, subtract debits
-      runningBalance = runningBalance + txn.credit - txn.debit;
-      txn.balance = runningBalance;
+      currentAccBal = currentAccBal + txn.credit - txn.debit;
+      runningBalances[txn.account] = currentAccBal;
+      txn.balance = currentAccBal;
     }
 
     if (persistToStorage) {
@@ -142,8 +155,28 @@ class TransactionViewModel extends ChangeNotifier {
       return;
     }
 
-    // List is maintained newest-first where balance of first item is current.
-    _currentBalance = _allTransactions.first.balance;
+    if (_showTotalBalance) {
+      Map<String, double> latestBalances = {};
+      for (var txn in _allTransactions) {
+        if (!latestBalances.containsKey(txn.account)) {
+          latestBalances[txn.account] = txn.balance;
+        }
+      }
+      _currentBalance = latestBalances.values.fold(0.0, (sum, val) => sum + val);
+    } else {
+      // List is maintained newest-first where balance of first item is current.
+      _currentBalance = _allTransactions.first.balance;
+    }
+  }
+
+  double getAccountBalance(String account) {
+    if (_allTransactions.isEmpty) return 0.0;
+    for (var txn in _allTransactions) {
+      if (txn.account == account) {
+        return txn.balance;
+      }
+    }
+    return 0.0;
   }
 
   // ==================== Transaction Management ====================
@@ -289,6 +322,42 @@ class TransactionViewModel extends ChangeNotifier {
 
     _defaultCategory = category;
     await _storage.saveDefaultCategory(category);
+    notifyListeners();
+  }
+
+  // ==================== Account Management ====================
+
+  Future<void> addAccount(String account) async {
+    final trimmed = account.trim();
+    if (trimmed.isEmpty || _accounts.contains(trimmed)) return;
+
+    _accounts.add(trimmed);
+    await _storage.saveAccounts(_accounts);
+    notifyListeners();
+  }
+
+  Future<void> deleteAccount(String account) async {
+    if (!_accounts.contains(account) || _accounts.length <= 1) return;
+
+    _accounts.remove(account);
+    await _storage.saveAccounts(_accounts);
+
+    for (final txn in _allTransactions) {
+      if (txn.account == account) {
+        txn.account = _accounts.first;
+      }
+    }
+
+    await _recalculateAllBalances();
+    _updateCurrentBalanceCache();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  Future<void> setShowTotalBalance(bool showTotal) async {
+    _showTotalBalance = showTotal;
+    await _storage.saveShowTotalBalance(showTotal);
+    _updateCurrentBalanceCache();
     notifyListeners();
   }
 

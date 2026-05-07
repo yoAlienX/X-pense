@@ -34,6 +34,7 @@ class _CategoryManagerSheetState extends State<_CategoryManagerSheet> {
     if (text.isEmpty) return;
 
     if (vm.categories.contains(text)) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         LiquidGlassSnackBar(
           context: context,
@@ -134,6 +135,7 @@ class _CategoryManagerSheetState extends State<_CategoryManagerSheet> {
                             : () async {
                                 await vm.deleteCategory(category);
                                 if (context.mounted) {
+                                  ScaffoldMessenger.of(context).clearSnackBars();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     LiquidGlassSnackBar(
                                       context: context,
