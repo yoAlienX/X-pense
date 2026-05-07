@@ -11,6 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+lib/liquid_glass_theme.dart
 
 # IntelliJ related
 *.iml
