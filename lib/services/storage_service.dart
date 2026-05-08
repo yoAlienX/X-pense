@@ -9,6 +9,8 @@ class StorageService {
   static const String _balanceVisibilityKey = 'balanceVisible';
   static const String _categoriesKey = 'categories';
   static const String _defaultCategoryKey = 'defaultCategory';
+  static const String _accountsKey = 'accounts';
+  static const String _showTotalBalanceKey = 'showTotalBalance';
   static const String _passcodeEnabledKey = 'passcodeEnabled';
   static const String _biometricEnabledKey = 'biometricEnabled';
   static const String _faceAuthEnabledKey = 'faceAuthEnabled';
@@ -118,6 +120,28 @@ class StorageService {
   /// Save default category
   Future<bool> saveDefaultCategory(String category) async {
     return await prefs.setString(_defaultCategoryKey, category);
+  }
+
+  // ==================== Account Storage ====================
+
+  /// Get account list
+  List<String>? getAccounts() {
+    return prefs.getStringList(_accountsKey);
+  }
+
+  /// Save account list
+  Future<bool> saveAccounts(List<String> accounts) async {
+    return await prefs.setStringList(_accountsKey, accounts);
+  }
+
+  /// Get show total balance preference
+  bool getShowTotalBalance() {
+    return prefs.getBool(_showTotalBalanceKey) ?? false;
+  }
+
+  /// Save show total balance preference
+  Future<bool> saveShowTotalBalance(bool showTotal) async {
+    return await prefs.setBool(_showTotalBalanceKey, showTotal);
   }
 
   // ==================== General Utilities ====================

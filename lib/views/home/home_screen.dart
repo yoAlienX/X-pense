@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 import '../../liquid_glass/liquid_glass_navbar.dart';
 import '../../services/csv_service.dart';
@@ -972,8 +973,8 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
 
-    if (shouldExit == true && context.mounted) {
-      Navigator.of(context).pop();
+    if (shouldExit == true) {
+      SystemNavigator.pop();
     }
   }
 
@@ -1417,6 +1418,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Navigator.pop(ctx);
 
                           if (context.mounted) {
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               LiquidGlassSnackBar(
                                 context: context,
@@ -1451,6 +1453,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (parsed == null) return;
       await vm.addMultipleTransactions(parsed);
       if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -1461,6 +1464,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -1484,6 +1488,7 @@ class _HomeScreenState extends State<HomeScreen> {
         : vm.filteredTransactions.toList();
 
     if (txs.isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         LiquidGlassSnackBar(
           context: context,
@@ -1508,6 +1513,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (e) {
       if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,

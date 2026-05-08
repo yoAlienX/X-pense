@@ -28,7 +28,6 @@ class BalanceCard extends StatelessWidget {
       ),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
         decoration: BoxDecoration(
           borderRadius: const BorderRadius.only(
             bottomLeft: Radius.circular(20),
@@ -49,69 +48,96 @@ class BalanceCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          children: [
-            // Balance label + visibility toggle
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Current Balance',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-                Row(
-                  children: [
-                    if (vm.allTransactions.isEmpty)
-                      _iconButton(
-                        Icons.edit,
-                        'Set Initial Balance',
-                        () => _showInitialBalanceDialog(context, vm),
-                      ),
-                    _iconButton(
-                      vm.balanceVisible
-                          ? Icons.visibility
-                          : Icons.visibility_off,
-                      vm.balanceVisible ? 'Hide Balance' : 'Show Balance',
-                      () => vm.toggleBalanceVisibility(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Balance amount
-            RandomMaskingText(
-              text: Formatters.currency(vm.currentBalance),
-              obscured: !vm.balanceVisible,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
+        child: vm.showTotalBalance
+          ? _buildSingleBalance(context, vm, "Total Balance", vm.currentBalance)
+          : _buildAccountSwiper(context, vm),
+      ),
+    );
+  }
+
+  Widget _buildAccountSwiper(BuildContext context, TransactionViewModel vm) {
+    if (vm.accounts.isEmpty) {
+      return _buildSingleBalance(context, vm, "Total Balance", vm.currentBalance);
+    }
+
+    return SizedBox(
+      height: 250,
+      child: PageView.builder(
+        itemCount: vm.accounts.length,
+        itemBuilder: (context, index) {
+          final account = vm.accounts[index];
+          final balance = vm.getAccountBalance(account);
+          return _buildSingleBalance(context, vm, account, balance);
+        },
+      ),
+    );
+  }
+
+  Widget _buildSingleBalance(BuildContext context, TransactionViewModel vm, String title, double balanceAmount) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      child: Column(
+        children: [
+          // Balance label + visibility toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
               ),
+              Row(
+                children: [
+                  if (vm.allTransactions.isEmpty)
+                    _iconButton(
+                      Icons.edit,
+                      'Set Initial Balance',
+                      () => _showInitialBalanceDialog(context, vm),
+                    ),
+                  _iconButton(
+                    vm.balanceVisible
+                        ? Icons.visibility
+                        : Icons.visibility_off,
+                    vm.balanceVisible ? 'Hide Balance' : 'Show Balance',
+                    () => vm.toggleBalanceVisibility(),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Balance amount
+          RandomMaskingText(
+            text: Formatters.currency(balanceAmount),
+            obscured: !vm.balanceVisible,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 20),
-            // Income / Expense tiles
-            Row(
-              children: [
-                _SummaryTile(
-                  label: 'Income',
-                  amount: vm.totalIncome,
-                  visible: vm.balanceVisible,
-                  isIncome: true,
-                  onTap: () => onSummaryTap?.call(true),
-                ),
-                const SizedBox(width: 16),
-                _SummaryTile(
-                  label: 'Expense',
-                  amount: vm.totalExpense,
-                  visible: vm.balanceVisible,
-                  isIncome: false,
-                  onTap: () => onSummaryTap?.call(false),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          // Income / Expense tiles
+          Row(
+            children: [
+              _SummaryTile(
+                label: 'Income',
+                amount: vm.totalIncome,
+                visible: vm.balanceVisible,
+                isIncome: true,
+                onTap: () => onSummaryTap?.call(true),
+              ),
+              const SizedBox(width: 16),
+              _SummaryTile(
+                label: 'Expense',
+                amount: vm.totalExpense,
+                visible: vm.balanceVisible,
+                isIncome: false,
+                onTap: () => onSummaryTap?.call(false),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

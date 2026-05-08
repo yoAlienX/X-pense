@@ -6,7 +6,8 @@ import '../../models/transaction.dart';
 import '../../utils/constants.dart';
 import '../../utils/formatters.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
-import 'widgets/interactive_donut_chart.dart';
+import 'widgets/animated_pie_chart.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'widgets/zero_expense_chart.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   String _selectedYear = 'All';
   int _selectedCategoryIndex = -1;
   bool _animatePieIn = false;
+  bool _showLineChart = false;
   final Set<String> _hiddenCategories = <String>{};
   final ScrollController _legendScrollController = ScrollController();
 
@@ -164,16 +166,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
+                            const Text(
                               'Expense Breakdown',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                            IconButton(
+                              icon: Icon(_showLineChart ? Icons.pie_chart : Icons.show_chart),
+                              onPressed: () {
+                                setState(() {
+                                  _showLineChart = !_showLineChart;
+                                });
+                              },
+                            )
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -200,8 +210,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               );
                             },
                             child: KeyedSubtree(
-                              key: const ValueKey<String>('pie-view'),
-                              child: _buildPieView(sorted, totalExp),
+                              key: ValueKey<String>(_showLineChart ? 'line-view' : 'pie-view'),
+                              child: _showLineChart ? _buildLineView(filtered) : _buildPieView(sorted, totalExp),
                             ),
                           ),
                       ],
@@ -522,27 +532,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: SizedBox(
                   width: chartSize,
                   height: chartSize,
-                  child: InteractiveDonutChart(
+                  child: AnimatedPieChart(
                     size: chartSize,
                     strokeWidth: chartSize * 0.22,
-                    selectedIndex: _selectedCategoryIndex,
-                    onSelected: (idx) {
-                      setState(() {
-                        _selectedCategoryIndex = _selectedCategoryIndex == idx
-                            ? -1
-                            : idx;
-                      });
-                    },
+                    backgroundColor: Colors.transparent,
                     segments: sorted.asMap().entries.map((me) {
                       final idx = me.key;
                       final entry = me.value;
                       final color = AppConstants
                           .chartColors[idx % AppConstants.chartColors.length];
-                      return DonutSegment(
+                      return PieChartSegment(
                         label: entry.key,
                         value: _animatePieIn ? entry.value : 0,
                         color: color,
-                        enabled: !_hiddenCategories.contains(entry.key),
+                        isSelected: !_hiddenCategories.contains(entry.key) && (_selectedCategoryIndex == -1 || _selectedCategoryIndex == idx),
                       );
                     }).toList(),
                     centerBuilder: (context, total) {
@@ -593,6 +596,108 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           )
         else
           ...legendRows,
+      ],
+    );
+  }
+
+  Widget _buildLineView(List<Transaction> filteredTx) {
+    if (filteredTx.isEmpty) return const SizedBox();
+
+    bool isMonthly = _selectedYear == 'All';
+    Map<int, double> expensesByGroup = {};
+
+    for (var tx in filteredTx) {
+      if (!tx.isExpense) continue;
+      int groupKey = isMonthly ? tx.date.month : tx.date.weekday;
+      expensesByGroup[groupKey] = (expensesByGroup[groupKey] ?? 0.0) + tx.debit;
+    }
+
+    List<FlSpot> spots = [];
+    double maxAmount = 0;
+
+    int maxGroup = isMonthly ? 12 : 7;
+    for (int i = 1; i <= maxGroup; i++) {
+      double amount = expensesByGroup[i] ?? 0.0;
+      if (amount > maxAmount) maxAmount = amount;
+      spots.add(FlSpot(i.toDouble(), amount));
+    }
+
+    if (maxAmount == 0) maxAmount = 100;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 240,
+          child: LineChart(
+            LineChartData(
+              gridData: const FlGridData(show: false),
+              titlesData: FlTitlesData(
+                show: true,
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 30,
+                    interval: 1,
+                    getTitlesWidget: (value, meta) {
+                      int intValue = value.toInt();
+                      String text = '';
+                      if (isMonthly) {
+                        if (intValue >= 1 && intValue <= 12) {
+                          text = AppConstants.monthNames[intValue].substring(0, 3);
+                        }
+                      } else {
+                        switch (intValue) {
+                          case 1: text = 'Mon'; break;
+                          case 2: text = 'Tue'; break;
+                          case 3: text = 'Wed'; break;
+                          case 4: text = 'Thu'; break;
+                          case 5: text = 'Fri'; break;
+                          case 6: text = 'Sat'; break;
+                          case 7: text = 'Sun'; break;
+                        }
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(text, style: const TextStyle(fontSize: 10)),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              borderData: FlBorderData(show: false),
+              minX: 1,
+              maxX: maxGroup.toDouble(),
+              minY: 0,
+              maxY: maxAmount * 1.2,
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: true,
+                  color: AppConstants.primaryPurple,
+                  barWidth: 3,
+                  isStrokeCapRound: true,
+                  dotData: const FlDotData(show: true),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    color: AppConstants.primaryPurple.withAlpha(30),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            isMonthly ? 'Monthly Expenses' : 'Daily Expenses (This Week)',
+            style: const TextStyle(fontWeight: FontWeight.w600, color: AppConstants.greyText),
+          ),
+        ),
       ],
     );
   }

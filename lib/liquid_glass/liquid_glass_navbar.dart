@@ -225,7 +225,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
     final tintColor = isDark
         ? Colors.white.withAlpha((cfg.tintOpacity * 255).round())
         : Colors.white.withAlpha(
-            (cfg.tintOpacity * 1.6 * 255).round().clamp(0, 255),
+            (cfg.tintOpacity * 2.2 * 255).round().clamp(0, 255),
           );
     final pillColor =
         cfg.pillColor ??
@@ -363,12 +363,42 @@ class _GlassPill extends StatelessWidget {
             // 2. Frosted tint
             Container(color: tintColor),
 
+            // Light mode extra frost layer
+            if (!isDark)
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [Colors.white54, Colors.transparent],
+                    radius: 1.5,
+                  ),
+                ),
+              ),
+
             // 3. Specular / iridescent edge highlight painted over everything
             CustomPaint(
               painter: _GlassEdgePainter(
                 borderRadius: borderRadius,
                 specularity: specularity,
                 isDark: isDark,
+              ),
+            ),
+
+            // Inner glow ring
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(borderRadius),
+                border: Border.all(
+                  color: isDark ? Colors.white24 : Colors.white60,
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark ? Colors.white12 : Colors.white30,
+                    blurStyle: BlurStyle.normal,
+                    blurRadius: 3.0,
+                    spreadRadius: -1.0,
+                  ),
+                ],
               ),
             ),
 
@@ -528,11 +558,11 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
     super.initState();
     _holdController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 60),
+      duration: const Duration(milliseconds: 180),
     );
     _holdAnim = CurvedAnimation(
       parent: _holdController,
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeOutBack,
       reverseCurve: Curves.easeInCubic,
     );
 
@@ -722,7 +752,7 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                     top: 6,
                     bottom: 6,
                     child: Transform.scale(
-                      scale: 1 + (0.08 * _holdAnim.value),
+                      scale: 1 + (0.18 * _holdAnim.value),
                       child: _PillBackground(
                         color: widget.pillColor,
                         specularity: widget.specularity,
@@ -815,6 +845,25 @@ class _PillBackground extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32),
               color: color,
+            ),
+          ),
+
+          // Inner glow ring
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: isDark ? Colors.white24 : Colors.white60,
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.white12 : Colors.white30,
+                  blurStyle: BlurStyle.normal,
+                  blurRadius: 3.0,
+                  spreadRadius: -1.0,
+                ),
+              ],
             ),
           ),
 

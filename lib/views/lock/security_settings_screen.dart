@@ -21,6 +21,147 @@ class SecuritySettingsScreen extends StatefulWidget {
   State<SecuritySettingsScreen> createState() => _SecuritySettingsScreenState();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Account Manager Sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AccountManagerSheet extends StatefulWidget {
+  const _AccountManagerSheet();
+
+  @override
+  State<_AccountManagerSheet> createState() => _AccountManagerSheetState();
+}
+
+class _AccountManagerSheetState extends State<_AccountManagerSheet> {
+  final TextEditingController _newAccountController = TextEditingController();
+
+  @override
+  void dispose() {
+    _newAccountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addAccount(TransactionViewModel vm) async {
+    final text = _newAccountController.text.trim();
+    if (text.isEmpty) return;
+
+    if (vm.accounts.contains(text)) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        LiquidGlassSnackBar(
+          context: context,
+          message: 'Account already exists',
+          type: SnackBarType.warning,
+        ),
+      );
+      return;
+    }
+
+    await vm.addAccount(text);
+    _newAccountController.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<TransactionViewModel>();
+    final accounts = vm.accounts;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 8,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Manage Accounts',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Add new accounts or remove existing ones.',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).textTheme.bodySmall?.color,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _newAccountController,
+                    textInputAction: TextInputAction.done,
+                    decoration: const InputDecoration(
+                      labelText: 'New account',
+                      hintText: 'e.g. Credit Card',
+                    ),
+                    onSubmitted: (_) => _addAccount(vm),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: () => _addAccount(vm),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: accounts.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final account = accounts[index];
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.account_balance_wallet_outlined),
+                      title: Text(
+                        account,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: IconButton(
+                        onPressed: accounts.length <= 1
+                            ? null
+                            : () async {
+                                await vm.deleteAccount(account);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).clearSnackBars();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    LiquidGlassSnackBar(
+                                      context: context,
+                                      message: 'Account "$account" deleted',
+                                      type: SnackBarType.success,
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Delete account',
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   final TextEditingController _setupPassController = TextEditingController();
   final TextEditingController _setupConfirmController = TextEditingController();
@@ -109,6 +250,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           onPressed: () async {
                             await vm.disablePasscode();
                             if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               LiquidGlassSnackBar(
                                 context: context,
@@ -145,6 +287,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       final errorMessage = vm.lastBiometricError.isEmpty
                           ? 'Could not enable biometric unlock'
                           : vm.lastBiometricError;
+                      ScaffoldMessenger.of(context).clearSnackBars();
                       ScaffoldMessenger.of(context).showSnackBar(
                         LiquidGlassSnackBar(
                           context: context,
@@ -227,6 +370,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                             if (parsed == null) return;
                             await txVm.addMultipleTransactions(parsed);
                             if (context.mounted) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 LiquidGlassSnackBar(
                                   context: context,
@@ -238,6 +382,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                             }
                           } catch (e) {
                             if (context.mounted) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 LiquidGlassSnackBar(
                                   context: context,
@@ -347,6 +493,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           await txVm.clearAllTransactions();
 
                           if (mounted) {
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               LiquidGlassSnackBar(
                                 context: context,
@@ -378,6 +526,48 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           ),
         ),
         const SizedBox(height: 20),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Accounts & Balance',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Manage accounts and customize balance visibility.',
+                ),
+                const SizedBox(height: 20),
+                SwitchListTile(
+                  title: const Text('Show Total Balance'),
+                  subtitle: const Text('Combine balances across all accounts'),
+                  value: context.watch<TransactionViewModel>().showTotalBalance,
+                  onChanged: (val) {
+                    context.read<TransactionViewModel>().setShowTotalBalance(val);
+                  },
+                  activeColor: AppConstants.primaryPurple,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 10),
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showAccountManager(context),
+                    icon: const Icon(Icons.account_balance_wallet_outlined),
+                    label: const Text('Manage Accounts'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 20),
         // ── Lock App Section ───────────────────────────────────────────────
       ],
     );
@@ -389,6 +579,15 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Security')),
       body: content,
+    );
+  }
+
+  void _showAccountManager(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _AccountManagerSheet(),
     );
   }
 
@@ -667,6 +866,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                       }
 
                                       if (context.mounted) {
+                                        ScaffoldMessenger.of(context).clearSnackBars();
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
@@ -922,6 +1122,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                                       }
 
                                       if (context.mounted) {
+                                        ScaffoldMessenger.of(context).clearSnackBars();
                                         ScaffoldMessenger.of(
                                           context,
                                         ).showSnackBar(
