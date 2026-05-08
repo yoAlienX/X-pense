@@ -6,10 +6,13 @@ import 'package:provider/provider.dart';
 import '../../services/csv_service.dart';
 import '../../utils/constants.dart';
 import '../../viewmodels/app_lock_viewmodel.dart';
+import '../../models/transaction.dart';
+import '../../utils/formatters.dart';
 import '../../viewmodels/theme_viewmodel.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
 import '../widgets/liquid_glass_snackbar.dart';
 import '../widgets/radial_theme_switch.dart';
+import 'lock_overlay_dialog.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   const SecuritySettingsScreen({Key? key, this.embedInHome = false})
@@ -34,15 +37,18 @@ class _AccountManagerSheet extends StatefulWidget {
 
 class _AccountManagerSheetState extends State<_AccountManagerSheet> {
   final TextEditingController _newAccountController = TextEditingController();
+  final TextEditingController _initialBalanceController = TextEditingController();
 
   @override
   void dispose() {
     _newAccountController.dispose();
+    _initialBalanceController.dispose();
     super.dispose();
   }
 
   Future<void> _addAccount(TransactionViewModel vm) async {
     final text = _newAccountController.text.trim();
+    final balanceText = _initialBalanceController.text.trim();
     if (text.isEmpty) return;
 
     if (vm.accounts.contains(text)) {
@@ -58,7 +64,26 @@ class _AccountManagerSheetState extends State<_AccountManagerSheet> {
     }
 
     await vm.addAccount(text);
+
+    final initialBalance = double.tryParse(balanceText) ?? 0.0;
+    if (initialBalance != 0.0) {
+      final t = Transaction(
+        id: 'initial_balance_${DateTime.now().millisecondsSinceEpoch}_$text',
+        date: DateTime.now(),
+        description: 'Initial Balance',
+        referenceNo: 'SYSTEM',
+        debit: initialBalance < 0 ? initialBalance.abs() : 0.0,
+        credit: initialBalance > 0 ? initialBalance : 0.0,
+        balance: initialBalance,
+        type: initialBalance >= 0 ? 'Credit' : 'Debit',
+        category: 'Initial Balance',
+        account: text,
+      );
+      await vm.addTransaction(t);
+    }
+
     _newAccountController.clear();
+    _initialBalanceController.clear();
   }
 
   @override
@@ -94,21 +119,34 @@ class _AccountManagerSheetState extends State<_AccountManagerSheet> {
             Row(
               children: [
                 Expanded(
+                  flex: 2,
                   child: TextField(
                     controller: _newAccountController,
-                    textInputAction: TextInputAction.done,
+                    textInputAction: TextInputAction.next,
                     decoration: const InputDecoration(
                       labelText: 'New account',
                       hintText: 'e.g. Credit Card',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 1,
+                  child: TextField(
+                    controller: _initialBalanceController,
+                    textInputAction: TextInputAction.done,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Initial bal',
+                      hintText: '0.00',
                     ),
                     onSubmitted: (_) => _addAccount(vm),
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton.icon(
+                FilledButton(
                   onPressed: () => _addAccount(vm),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add'),
+                  child: const Icon(Icons.add),
                 ),
               ],
             ),
@@ -122,14 +160,26 @@ class _AccountManagerSheetState extends State<_AccountManagerSheet> {
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final account = accounts[index];
+                    final balance = vm.getAccountBalance(account);
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.account_balance_wallet_outlined),
-                      title: Text(
-                        account,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      title: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              account,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            vm.balanceVisible ? Formatters.currency(balance) : '₹ •••••',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
                       trailing: IconButton(
                         onPressed: accounts.length <= 1
@@ -550,6 +600,39 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                   value: context.watch<TransactionViewModel>().showTotalBalance,
                   onChanged: (val) {
                     context.read<TransactionViewModel>().setShowTotalBalance(val);
+                  },
+                  activeColor: AppConstants.primaryPurple,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                SwitchListTile(
+                  title: const Text('Mask Account Balances'),
+                  subtitle: const Text('Hide balances by default'),
+                  value: !context.watch<TransactionViewModel>().balanceVisible,
+                  onChanged: (val) async {
+                    if (val) {
+                      await context.read<TransactionViewModel>().toggleBalanceVisibility();
+                    } else {
+                      final vm = context.read<AppLockViewModel>();
+                      if (vm.passcodeEnabled) {
+                        final authSuccess = await vm.authenticate(() => showLockOverlayDialog(context));
+                        if (authSuccess) {
+                          await context.read<TransactionViewModel>().toggleBalanceVisibility();
+                        } else {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              LiquidGlassSnackBar(
+                                context: context,
+                                message: 'Authentication required to reveal balances',
+                                type: SnackBarType.error,
+                              ),
+                            );
+                          }
+                        }
+                      } else {
+                        await context.read<TransactionViewModel>().toggleBalanceVisibility();
+                      }
+                    }
                   },
                   activeColor: AppConstants.primaryPurple,
                   contentPadding: EdgeInsets.zero,

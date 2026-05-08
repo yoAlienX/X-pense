@@ -61,6 +61,31 @@ class AppLockViewModel extends ChangeNotifier {
     }
   }
 
+  // Note: For unlocking inline views via passcode, a robust implementation would
+  // present a bottom sheet or a dialog for passcode entry. Here we simulate that
+  // the app requests an authentication flow from the caller.
+  // Biometrics are used first if enabled.
+  Future<bool> authenticate(Future<bool> Function() onFallbackToPasscode) async {
+    if (!passcodeEnabled) return true;
+
+    if (biometricEnabled && biometricAvailable) {
+      try {
+        final success = await _localAuth.authenticate(
+          localizedReason: 'Authenticate to reveal balances',
+          options: const AuthenticationOptions(
+            biometricOnly: true,
+            stickyAuth: true,
+          ),
+        );
+        if (success) return true;
+      } catch (e) {
+        debugPrint('Authentication error: $e');
+      }
+    }
+
+    return await onFallbackToPasscode();
+  }
+
   Future<void> refreshBiometricAvailability() async {
     final oldAvailable = _biometricAvailable;
     final oldError = _lastBiometricError;

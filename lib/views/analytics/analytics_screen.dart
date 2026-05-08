@@ -25,6 +25,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   int _selectedCategoryIndex = -1;
   bool _animatePieIn = false;
   bool _showLineChart = false;
+  String _lineChartRange = 'Weekly';
   final Set<String> _hiddenCategories = <String>{};
   final ScrollController _legendScrollController = ScrollController();
 
@@ -603,19 +604,39 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Widget _buildLineView(List<Transaction> filteredTx) {
     if (filteredTx.isEmpty) return const SizedBox();
 
-    bool isMonthly = _selectedYear == 'All';
+    final now = DateTime.now();
+
+    List<Transaction> chartTx = [];
+    if (_lineChartRange == 'Weekly') {
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      chartTx = filteredTx.where((tx) => tx.date.isAfter(startOfWeek.subtract(const Duration(days: 1))) && tx.date.isBefore(startOfWeek.add(const Duration(days: 7)))).toList();
+    } else if (_lineChartRange == '2 Weeks') {
+      final startOfLastWeek = now.subtract(Duration(days: now.weekday - 1 + 7));
+      chartTx = filteredTx.where((tx) => tx.date.isAfter(startOfLastWeek.subtract(const Duration(days: 1))) && tx.date.isBefore(startOfLastWeek.add(const Duration(days: 14)))).toList();
+    } else { // Monthly
+      chartTx = filteredTx.where((tx) => tx.date.year == now.year).toList();
+    }
+
     Map<int, double> expensesByGroup = {};
 
-    for (var tx in filteredTx) {
+    for (var tx in chartTx) {
       if (!tx.isExpense) continue;
-      int groupKey = isMonthly ? tx.date.month : tx.date.weekday;
+      int groupKey;
+      if (_lineChartRange == 'Weekly') {
+        groupKey = tx.date.weekday;
+      } else if (_lineChartRange == '2 Weeks') {
+        final startOfLastWeek = now.subtract(Duration(days: now.weekday - 1 + 7));
+        groupKey = tx.date.difference(startOfLastWeek).inDays + 1;
+      } else {
+        groupKey = tx.date.month;
+      }
       expensesByGroup[groupKey] = (expensesByGroup[groupKey] ?? 0.0) + tx.debit;
     }
 
     List<FlSpot> spots = [];
     double maxAmount = 0;
 
-    int maxGroup = isMonthly ? 12 : 7;
+    int maxGroup = _lineChartRange == 'Monthly' ? 12 : (_lineChartRange == '2 Weeks' ? 14 : 7);
     for (int i = 1; i <= maxGroup; i++) {
       double amount = expensesByGroup[i] ?? 0.0;
       if (amount > maxAmount) maxAmount = amount;
@@ -627,6 +648,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Range selector
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: ['Weekly', '2 Weeks', 'Monthly'].map((range) {
+            final isSelected = _lineChartRange == range;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: ChoiceChipWidget(
+                label: range,
+                isSelected: isSelected,
+                onSelected: (selected) {
+                  if (selected) {
+                    setState(() => _lineChartRange = range);
+                  }
+                },
+              ),
+            );
+          }).toList(),
+        ),
         const SizedBox(height: 16),
         SizedBox(
           height: 240,
@@ -646,19 +686,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     getTitlesWidget: (value, meta) {
                       int intValue = value.toInt();
                       String text = '';
-                      if (isMonthly) {
+                      if (_lineChartRange == 'Monthly') {
                         if (intValue >= 1 && intValue <= 12) {
                           text = AppConstants.monthNames[intValue].substring(0, 3);
                         }
-                      } else {
+                      } else if (_lineChartRange == 'Weekly') {
                         switch (intValue) {
-                          case 1: text = 'Mon'; break;
-                          case 2: text = 'Tue'; break;
-                          case 3: text = 'Wed'; break;
-                          case 4: text = 'Thu'; break;
-                          case 5: text = 'Fri'; break;
-                          case 6: text = 'Sat'; break;
-                          case 7: text = 'Sun'; break;
+                          case 1: text = 'M'; break;
+                          case 2: text = 'T'; break;
+                          case 3: text = 'W'; break;
+                          case 4: text = 'T'; break;
+                          case 5: text = 'F'; break;
+                          case 6: text = 'S'; break;
+                          case 7: text = 'S'; break;
+                        }
+                      } else if (_lineChartRange == '2 Weeks') {
+                        if (intValue % 2 != 0) {
+                          text = intValue.toString();
                         }
                       }
                       return Padding(
@@ -694,11 +738,45 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         const SizedBox(height: 16),
         Center(
           child: Text(
-            isMonthly ? 'Monthly Expenses' : 'Daily Expenses (This Week)',
+            '$_lineChartRange Expenses',
             style: const TextStyle(fontWeight: FontWeight.w600, color: AppConstants.greyText),
           ),
         ),
       ],
+    );
+  }
+}
+
+class ChoiceChipWidget extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Function(bool) onSelected;
+
+  const ChoiceChipWidget({
+    Key? key,
+    required this.label,
+    required this.isSelected,
+    required this.onSelected,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: onSelected,
+      selectedColor: AppConstants.primaryPurple.withAlpha(50),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      labelStyle: TextStyle(
+        color: isSelected ? AppConstants.primaryPurple : Theme.of(context).textTheme.bodyMedium?.color,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isSelected ? AppConstants.primaryPurple : Colors.grey.withAlpha(80),
+        ),
+      ),
     );
   }
 }
