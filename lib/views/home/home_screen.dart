@@ -708,7 +708,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final title = _currentTab == _kTabAnalytics
         ? 'Analytics'
         : _currentTab == _kTabSettings
-        ? 'Security'
+        ? 'Settings'
         : 'X-pense';
 
     // Normal AppBar — title left, lock + menu right

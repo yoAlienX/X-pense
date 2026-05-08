@@ -91,121 +91,198 @@ class _AccountManagerSheetState extends State<_AccountManagerSheet> {
     final vm = context.watch<TransactionViewModel>();
     final accounts = vm.accounts;
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 16,
-          top: 8,
-          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Manage Accounts',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Add new accounts or remove existing ones.',
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).textTheme.bodySmall?.color,
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withAlpha(AppConstants.glassPanelAlpha),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.white.withAlpha(AppConstants.glassBorderAlpha),
+                width: 1,
               ),
             ),
-            const SizedBox(height: 12),
-            Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  flex: 2,
-                  child: TextField(
-                    controller: _newAccountController,
-                    textInputAction: TextInputAction.next,
-                    decoration: const InputDecoration(
-                      labelText: 'New account',
-                      hintText: 'e.g. Credit Card',
-                    ),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Manage Accounts',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  flex: 1,
-                  child: TextField(
-                    controller: _initialBalanceController,
-                    textInputAction: TextInputAction.done,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Initial bal',
-                      hintText: '0.00',
-                    ),
-                    onSubmitted: (_) => _addAccount(vm),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: () => _addAccount(vm),
-                  child: const Icon(Icons.add),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Flexible(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: accounts.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final account = accounts[index];
-                    final balance = vm.getAccountBalance(account);
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.account_balance_wallet_outlined),
-                      title: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                const Divider(height: 1),
+
+                // Add Account Form
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Add New Account',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              account,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            flex: 2,
+                            child: TextField(
+                              controller: _newAccountController,
+                              textInputAction: TextInputAction.next,
+                              decoration: InputDecoration(
+                                labelText: 'Account Name',
+                                hintText: 'e.g. Credit Card',
+                                isDense: true,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
                             ),
                           ),
-                          Text(
-                            vm.balanceVisible ? Formatters.currency(balance) : '₹ •••••',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 1,
+                            child: TextField(
+                              controller: _initialBalanceController,
+                              textInputAction: TextInputAction.done,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: InputDecoration(
+                                labelText: 'Initial Bal',
+                                hintText: '0.00',
+                                isDense: true,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                              onSubmitted: (_) => _addAccount(vm),
+                            ),
                           ),
                         ],
                       ),
-                      trailing: IconButton(
-                        onPressed: accounts.length <= 1
-                            ? null
-                            : () async {
-                                await vm.deleteAccount(account);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).clearSnackBars();
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    LiquidGlassSnackBar(
-                                      context: context,
-                                      message: 'Account "$account" deleted',
-                                      type: SnackBarType.success,
-                                    ),
-                                  );
-                                }
-                              },
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: 'Delete account',
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _addAccount(vm),
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: const Text('Add Account'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppConstants.primaryPurple,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
-              ),
+
+                // Accounts List
+                Container(
+                  color: Colors.black.withOpacity(0.05),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                        child: Text(
+                          'Existing Accounts',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      ),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxHeight: MediaQuery.of(context).size.height * 0.35,
+                        ),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                          shrinkWrap: true,
+                          itemCount: accounts.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final account = accounts[index];
+                            final balance = vm.getAccountBalance(account);
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: Colors.grey.withOpacity(0.2),
+                                ),
+                              ),
+                              child: ListTile(
+                                leading: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: AppConstants.primaryPurple.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.account_balance_wallet_outlined, color: AppConstants.primaryPurple, size: 20),
+                                ),
+                                title: Text(
+                                  account,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                                subtitle: Text(
+                                  vm.balanceVisible ? Formatters.currency(balance) : '₹ •••••',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                trailing: IconButton(
+                                  onPressed: accounts.length <= 1
+                                      ? null
+                                      : () async {
+                                          await vm.deleteAccount(account);
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).clearSnackBars();
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              LiquidGlassSnackBar(
+                                                context: context,
+                                                message: 'Account "$account" deleted',
+                                                type: SnackBarType.success,
+                                              ),
+                                            );
+                                          }
+                                        },
+                                  icon: const Icon(Icons.delete_outline, color: AppConstants.expenseRed),
+                                  tooltip: 'Delete account',
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -256,6 +333,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     final content = ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // ── Theme Section ─────────────────────────────────────────────────
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -315,73 +393,177 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       ),
                     ],
                   ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  title: const Text('Use Biometrics'),
+                  subtitle: Text(
+                    vm.biometricAvailable
+                        ? 'Unlock with biometrics where supported.'
+                        : 'Biometric authentication is not available on this device.',
+                  ),
+                  value: vm.biometricEnabled,
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (!vm.passcodeEnabled)
+                      ? null
+                      : (enabled) async {
+                          final ok = await vm.setBiometricEnabled(enabled);
+                          if (!ok && context.mounted) {
+                            final errorMessage = vm.lastBiometricError.isEmpty
+                                ? 'Could not enable biometric unlock'
+                                : vm.lastBiometricError;
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              LiquidGlassSnackBar(
+                                context: context,
+                                message: errorMessage,
+                                type: SnackBarType.error,
+                              ),
+                            );
+                          }
+                        },
+                ),
+                if (vm.passcodeEnabled) ...[
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        context.read<TransactionViewModel>().forceMaskBalance();
+                        vm.lockApp();
+                      });
+                    },
+                    icon: const Icon(Icons.lock),
+                    label: const Text('Lock App Now'),
+                  ),
+                ],
               ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        Card(
-          child: SwitchListTile(
-            title: const Text('Use Biometrics'),
-            subtitle: Text(
-              vm.biometricAvailable
-                  ? 'Unlock with biometrics where supported.'
-                  : 'Biometric authentication is not available on this device.',
-            ),
-            value: vm.biometricEnabled,
-            onChanged: (!vm.passcodeEnabled)
-                ? null
-                : (enabled) async {
-                    final ok = await vm.setBiometricEnabled(enabled);
-                    if (!ok && context.mounted) {
-                      final errorMessage = vm.lastBiometricError.isEmpty
-                          ? 'Could not enable biometric unlock'
-                          : vm.lastBiometricError;
-                      ScaffoldMessenger.of(context).clearSnackBars();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        LiquidGlassSnackBar(
-                          context: context,
-                          message: errorMessage,
-                          type: SnackBarType.error,
-                        ),
-                      );
-                    }
-                  },
-          ),
-        ),
         const SizedBox(height: 20),
-        if (vm.passcodeEnabled)
-          ElevatedButton.icon(
-            onPressed: () {
-              // Defer lock transition to the next frame to avoid route
-              // mutations during the current build/gesture pipeline.
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                context.read<TransactionViewModel>().forceMaskBalance();
-                vm.lockApp();
-              });
-            },
-            icon: const Icon(Icons.lock),
-            label: const Text('Lock App Now'),
-          ),
-        const SizedBox(height: 20),
-        // ── Theme Section ─────────────────────────────────────────────────
+
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Appearance',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Accounts & Balance',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: () => _showAccountManager(context),
+                      tooltip: 'Add Account',
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                Consumer<ThemeViewModel>(
-                  builder: (context, themeVm, _) {
-                    return RadialThemeSwitch(themeViewModel: themeVm);
+                Text(
+                  'Manage accounts and customize balance visibility.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 20),
+                SwitchListTile(
+                  title: const Text('Show Total Balance'),
+                  subtitle: const Text('Combine balances across all accounts'),
+                  value: context.watch<TransactionViewModel>().showTotalBalance,
+                  onChanged: (val) {
+                    context.read<TransactionViewModel>().setShowTotalBalance(val);
+                  },
+                  activeColor: AppConstants.primaryPurple,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                const SizedBox(height: 10),
+                Consumer<TransactionViewModel>(
+                  builder: (context, txVm, _) {
+                    final accounts = txVm.accounts;
+                    return ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: accounts.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final account = accounts[index];
+                        final balance = txVm.getAccountBalance(account);
+                        return Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface.withAlpha(
+                              AppConstants.glassFillAlpha,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withAlpha(AppConstants.glassBorderAlpha),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.account_balance_wallet_outlined, color: AppConstants.primaryPurple),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    account,
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                                  ),
+                                ],
+                              ),
+                              Row(
+                                children: [
+                                  Text(
+                                    txVm.balanceVisible ? Formatters.currency(balance) : '₹ •••••',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: Icon(
+                                      txVm.balanceVisible ? Icons.visibility : Icons.visibility_off,
+                                      size: 20,
+                                    ),
+                                    onPressed: () async {
+                                      if (txVm.balanceVisible) {
+                                        await txVm.toggleBalanceVisibility();
+                                      } else {
+                                        final lockVm = context.read<AppLockViewModel>();
+                                        if (lockVm.passcodeEnabled) {
+                                          final authSuccess = await lockVm.authenticate(() => showLockOverlayDialog(context));
+                                          if (authSuccess) {
+                                            await txVm.toggleBalanceVisibility();
+                                          } else {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context).clearSnackBars();
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                LiquidGlassSnackBar(
+                                                  context: context,
+                                                  message: 'Authentication required to reveal balances',
+                                                  type: SnackBarType.error,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        } else {
+                                          await txVm.toggleBalanceVisibility();
+                                        }
+                                      }
+                                    },
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
                   },
                 ),
               ],
@@ -584,74 +766,22 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Accounts & Balance',
+                  'Appearance',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'Manage accounts and customize balance visibility.',
-                ),
-                const SizedBox(height: 20),
-                SwitchListTile(
-                  title: const Text('Show Total Balance'),
-                  subtitle: const Text('Combine balances across all accounts'),
-                  value: context.watch<TransactionViewModel>().showTotalBalance,
-                  onChanged: (val) {
-                    context.read<TransactionViewModel>().setShowTotalBalance(val);
+                Consumer<ThemeViewModel>(
+                  builder: (context, themeVm, _) {
+                    return RadialThemeSwitch(themeViewModel: themeVm);
                   },
-                  activeColor: AppConstants.primaryPurple,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                SwitchListTile(
-                  title: const Text('Mask Account Balances'),
-                  subtitle: const Text('Hide balances by default'),
-                  value: !context.watch<TransactionViewModel>().balanceVisible,
-                  onChanged: (val) async {
-                    if (val) {
-                      await context.read<TransactionViewModel>().toggleBalanceVisibility();
-                    } else {
-                      final vm = context.read<AppLockViewModel>();
-                      if (vm.passcodeEnabled) {
-                        final authSuccess = await vm.authenticate(() => showLockOverlayDialog(context));
-                        if (authSuccess) {
-                          await context.read<TransactionViewModel>().toggleBalanceVisibility();
-                        } else {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).clearSnackBars();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              LiquidGlassSnackBar(
-                                context: context,
-                                message: 'Authentication required to reveal balances',
-                                type: SnackBarType.error,
-                              ),
-                            );
-                          }
-                        }
-                      } else {
-                        await context.read<TransactionViewModel>().toggleBalanceVisibility();
-                      }
-                    }
-                  },
-                  activeColor: AppConstants.primaryPurple,
-                  contentPadding: EdgeInsets.zero,
-                ),
-                const SizedBox(height: 10),
-                Center(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showAccountManager(context),
-                    icon: const Icon(Icons.account_balance_wallet_outlined),
-                    label: const Text('Manage Accounts'),
-                  ),
                 ),
               ],
             ),
           ),
         ),
-
         const SizedBox(height: 20),
-        // ── Lock App Section ───────────────────────────────────────────────
       ],
     );
 
@@ -660,7 +790,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Security')),
+      appBar: AppBar(title: const Text('Settings')),
       body: content,
     );
   }
