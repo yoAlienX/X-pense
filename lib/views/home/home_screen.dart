@@ -39,7 +39,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   // ── state ──────────────────────────────────────────────────────────────────
   int _currentTab = _kTabTransactions;
-  final List<int> _tabHistory = <int>[];
   bool _isProgrammaticPageChange = false;
   bool _isTabTransitioning = false;
   bool _showFilters = false;
@@ -116,13 +115,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
 
-        // If on home screen with no history, show exit confirmation
-        if (_currentTab == _kTabTransactions && _tabHistory.isEmpty) {
+        if (_currentTab == _kTabTransactions) {
           _handleExitPress(context);
           return;
         }
 
-        _handleTabBackNavigation();
+        _animateToTab(_kTabTransactions, pushToHistory: false);
       },
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -151,10 +149,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     // This prevents navbar animation repetition by ensuring it plays only once.
                     setState(() => _currentTab = index);
 
-                    // Only track history for gesture-based (non-programmatic) changes
-                    if (!_isProgrammaticPageChange) {
-                      _pushTabHistory(_currentTab);
-                    }
                   }
                 },
                 children: [
@@ -186,34 +180,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _pushTabHistory(int tab) {
-    if (_tabHistory.isEmpty || _tabHistory.last != tab) {
-      _tabHistory.add(tab);
-    }
-  }
-
-  void _handleTabBackNavigation() {
-    if (_tabHistory.isNotEmpty) {
-      final previousTab = _tabHistory.removeLast();
-      _animateToTab(previousTab, pushToHistory: false);
-      return;
-    }
-
-    if (_currentTab != _kTabTransactions) {
-      _animateToTab(_kTabTransactions, pushToHistory: false);
-    }
-  }
-
   Future<void> _animateToTab(int index, {required bool pushToHistory}) async {
     if (_isTabTransitioning || _currentTab == index) {
       return;
     }
 
     final fromIndex = _currentTab;
-
-    if (pushToHistory) {
-      _pushTabHistory(fromIndex);
-    }
 
     _isProgrammaticPageChange = true;
     _isTabTransitioning = true;

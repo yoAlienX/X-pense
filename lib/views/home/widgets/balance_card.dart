@@ -7,7 +7,10 @@ import '../../../utils/constants.dart';
 import '../../../utils/formatters.dart';
 import '../../../viewmodels/transaction_viewmodel.dart';
 import '../../../viewmodels/theme_viewmodel.dart';
+import '../../../viewmodels/app_lock_viewmodel.dart';
 import '../../widgets/random_masking_text.dart';
+import '../../widgets/liquid_glass_snackbar.dart';
+import '../../lock/lock_overlay_dialog.dart';
 
 class BalanceCard extends StatelessWidget {
   /// Called when the user taps the income or expense summary tile.
@@ -99,7 +102,32 @@ class BalanceCard extends StatelessWidget {
                         ? Icons.visibility
                         : Icons.visibility_off,
                     vm.balanceVisible ? 'Hide Balance' : 'Show Balance',
-                    () => vm.toggleBalanceVisibility(),
+                    () async {
+                      if (vm.balanceVisible) {
+                        await vm.toggleBalanceVisibility();
+                      } else {
+                        final lockVm = context.read<AppLockViewModel>();
+                        if (lockVm.passcodeEnabled) {
+                          final authSuccess = await lockVm.authenticate(() => showLockOverlayDialog(context));
+                          if (authSuccess) {
+                            await vm.toggleBalanceVisibility();
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                LiquidGlassSnackBar(
+                                  context: context,
+                                  message: 'Authentication required to reveal balances',
+                                  type: SnackBarType.error,
+                                ),
+                              );
+                            }
+                          }
+                        } else {
+                          await vm.toggleBalanceVisibility();
+                        }
+                      }
+                    },
                   ),
                 ],
               ),
