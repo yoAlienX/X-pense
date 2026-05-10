@@ -452,16 +452,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       return GestureDetector(
         onTap: () {
           setState(() {
-            _selectedCategoryIndex = _selectedCategoryIndex == idx ? -1 : idx;
+            if (visible) {
+              _hiddenCategories.add(entry.key);
+            } else {
+              _hiddenCategories.remove(entry.key);
+            }
           });
         },
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
           decoration: BoxDecoration(
-            color: _selectedCategoryIndex == idx
-                ? color.withAlpha(50)
-                : Colors.transparent,
+            color: _selectedCategoryIndex == idx ? color.withAlpha(50) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: visible ? Colors.transparent : AppConstants.greyText,
@@ -470,32 +472,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
           child: Row(
             children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () {
-                  setState(() {
-                    if (visible) {
-                      _hiddenCategories.add(entry.key);
-                      if (_selectedCategoryIndex == idx) {
-                        _selectedCategoryIndex = -1;
-                      }
-                    } else {
-                      _hiddenCategories.remove(entry.key);
-                    }
-                  });
-                },
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: visible ? color : Colors.transparent,
-                    border: visible ? null : Border.all(color: color, width: 2),
-                  ),
-                  child: visible
-                      ? const Icon(Icons.check, size: 12, color: Colors.white)
-                      : null,
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: visible ? color : Colors.transparent,
+                  border: visible ? null : Border.all(color: color, width: 2),
                 ),
+                child: visible
+                    ? const Icon(Icons.check, size: 12, color: Colors.white)
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -537,6 +524,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     size: chartSize,
                     strokeWidth: chartSize * 0.22,
                     backgroundColor: Colors.transparent,
+                    onSegmentTapped: (idx) {
+                      setState(() {
+                        if (_selectedCategoryIndex == idx) {
+                           _selectedCategoryIndex = -1;
+                        } else {
+                           _selectedCategoryIndex = idx;
+                        }
+                      });
+                    },
                     segments: sorted.asMap().entries.map((me) {
                       final idx = me.key;
                       final entry = me.value;
@@ -546,7 +542,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         label: entry.key,
                         value: _animatePieIn ? entry.value : 0,
                         color: color,
-                        isSelected: !_hiddenCategories.contains(entry.key) && (_selectedCategoryIndex == -1 || _selectedCategoryIndex == idx),
+                        isSelected: !_hiddenCategories.contains(entry.key),
                       );
                     }).toList(),
                     centerBuilder: (context, total) {
@@ -673,6 +669,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           child: LineChart(
             LineChartData(
               gridData: const FlGridData(show: false),
+              lineTouchData: LineTouchData(
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipColor: (touchedSpot) => Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withAlpha(220)
+                      : Colors.black.withAlpha(220),
+                  getTooltipItems: (touchedSpots) {
+                    return touchedSpots.map((spot) {
+                      return LineTooltipItem(
+                        Formatters.currency(spot.y),
+                        TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.black
+                              : Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
+              ),
               titlesData: FlTitlesData(
                 show: true,
                 rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -721,7 +737,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               lineBarsData: [
                 LineChartBarData(
                   spots: spots,
-                  isCurved: true,
+                  isCurved: false,
                   color: AppConstants.primaryPurple,
                   barWidth: 3,
                   isStrokeCapRound: true,

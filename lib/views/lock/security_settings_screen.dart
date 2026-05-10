@@ -86,6 +86,50 @@ class _AccountManagerSheetState extends State<_AccountManagerSheet> {
     _initialBalanceController.clear();
   }
 
+  void _showEditBalanceDialog(BuildContext context, TransactionViewModel vm, String account, double currentBalance) {
+    final ctrl = TextEditingController(text: currentBalance.toStringAsFixed(2));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Edit $account Balance'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'New Balance',
+            hintText: '0.00',
+            prefixText: '₹ ',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final val = double.tryParse(ctrl.text) ?? 0.0;
+              await vm.editAccountBalance(account, val);
+              if (context.mounted) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).clearSnackBars();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  LiquidGlassSnackBar(
+                    context: context,
+                    message: 'Balance updated for $account',
+                    type: SnackBarType.success,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<TransactionViewModel>();
@@ -253,24 +297,36 @@ class _AccountManagerSheetState extends State<_AccountManagerSheet> {
                                   vm.balanceVisible ? Formatters.currency(balance) : '₹ •••••',
                                   style: const TextStyle(fontWeight: FontWeight.bold),
                                 ),
-                                trailing: IconButton(
-                                  onPressed: accounts.length <= 1
-                                      ? null
-                                      : () async {
-                                          await vm.deleteAccount(account);
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).clearSnackBars();
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              LiquidGlassSnackBar(
-                                                context: context,
-                                                message: 'Account "$account" deleted',
-                                                type: SnackBarType.success,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                  icon: const Icon(Icons.delete_outline, color: AppConstants.expenseRed),
-                                  tooltip: 'Delete account',
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () {
+                                        _showEditBalanceDialog(context, vm, account, balance);
+                                      },
+                                      icon: const Icon(Icons.edit_outlined, color: AppConstants.primaryPurple),
+                                      tooltip: 'Edit balance',
+                                    ),
+                                    IconButton(
+                                      onPressed: accounts.length <= 1
+                                          ? null
+                                          : () async {
+                                              await vm.deleteAccount(account);
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).clearSnackBars();
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  LiquidGlassSnackBar(
+                                                    context: context,
+                                                    message: 'Account "$account" deleted',
+                                                    type: SnackBarType.success,
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                      icon: const Icon(Icons.delete_outline, color: AppConstants.expenseRed),
+                                      tooltip: 'Delete account',
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
@@ -615,7 +671,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           } catch (e) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).clearSnackBars();
-                              ScaffoldMessenger.of(context).clearSnackBars();
                               ScaffoldMessenger.of(context).showSnackBar(
                                 LiquidGlassSnackBar(
                                   context: context,
@@ -725,7 +780,6 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           await txVm.clearAllTransactions();
 
                           if (mounted) {
-                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               LiquidGlassSnackBar(
