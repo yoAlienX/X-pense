@@ -11,6 +11,7 @@ import 'views/home/home_screen.dart';
 import 'views/lock/lock_screen.dart';
 import 'views/loading_screen.dart';
 import 'views/widgets/theme_switcher.dart';
+import 'views/onboarding/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -95,6 +96,8 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
     with WidgetsBindingObserver {
   bool _minimumSplashElapsed = false;
   bool _hasShownInitialContent = false;
+  bool _isOnboardingComplete = true; // Assume true until checked
+  bool _hasCheckedOnboarding = false;
   AppLifecycleState? _lastState;
 
   @override
@@ -105,11 +108,24 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
       if (!mounted) return;
       context.read<TransactionViewModel>().forceMaskBalance();
     });
+
+    _checkOnboardingStatus();
+
     Future<void>.delayed(const Duration(milliseconds: 1700), () {
       if (mounted) {
         setState(() => _minimumSplashElapsed = true);
       }
     });
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final hasCompleted = await StorageService().hasCompletedOnboarding();
+    if (mounted) {
+      setState(() {
+        _isOnboardingComplete = hasCompleted;
+        _hasCheckedOnboarding = true;
+      });
+    }
   }
 
   @override
@@ -139,7 +155,7 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
 
     final shouldShowStartupSplash =
         !_hasShownInitialContent &&
-        (vm.isLoading || lockVm.isInitializing || !_minimumSplashElapsed);
+        (vm.isLoading || lockVm.isInitializing || !_minimumSplashElapsed || !_hasCheckedOnboarding);
 
     if (shouldShowStartupSplash) {
       return const LoadingScreen();
@@ -151,6 +167,10 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
           setState(() => _hasShownInitialContent = true);
         }
       });
+    }
+
+    if (!_isOnboardingComplete) {
+      return const OnboardingScreen();
     }
 
     if (lockVm.shouldRequireLock && lockVm.isLocked) {
