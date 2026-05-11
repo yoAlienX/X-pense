@@ -342,14 +342,43 @@ class TransactionViewModel extends ChangeNotifier {
     _accounts.remove(account);
     await _storage.saveAccounts(_accounts);
 
-    for (final txn in _allTransactions) {
-      if (txn.account == account) {
-        txn.account = _accounts.first;
-      }
-    }
+    // Remove all transactions associated with the deleted account
+    _allTransactions.removeWhere((txn) => txn.account == account);
 
     await _recalculateAllBalances();
     _updateCurrentBalanceCache();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  Future<void> editAccountBalance(String account, double newBalance) async {
+    if (!_accounts.contains(account)) return;
+
+    // Remove the previous initial balance transaction if it exists
+    _allTransactions.removeWhere((txn) => txn.account == account && txn.category == 'Initial Balance');
+
+    if (newBalance != 0.0) {
+      final t = Transaction(
+        id: 'initial_balance_${DateTime.now().millisecondsSinceEpoch}_$account',
+        date: DateTime.now(),
+        description: 'Initial Balance',
+        referenceNo: 'SYSTEM',
+        debit: newBalance < 0 ? newBalance.abs() : 0.0,
+        credit: newBalance > 0 ? newBalance : 0.0,
+        balance: newBalance,
+        type: newBalance >= 0 ? 'Credit' : 'Debit',
+        category: 'Initial Balance',
+        account: account,
+      );
+      _allTransactions.add(t);
+    }
+
+    await _recalculateAllBalances();
+
+    // Re-sort for display (newest first)
+    _allTransactions.sort((a, b) => b.date.compareTo(a.date));
+    _updateCurrentBalanceCache();
+
     _applyFilters();
     notifyListeners();
   }

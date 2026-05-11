@@ -25,6 +25,7 @@ class AnimatedPieChart extends StatefulWidget {
   final double size;
   final double strokeWidth;
   final Color backgroundColor;
+  final Function(int)? onSegmentTapped;
 
   const AnimatedPieChart({
     super.key,
@@ -33,6 +34,7 @@ class AnimatedPieChart extends StatefulWidget {
     this.size = _defaultPieChartSize,
     this.strokeWidth = _defaultPieChartStrokeWidth,
     this.backgroundColor = const Color(0xFF17202A),
+    this.onSegmentTapped,
   });
 
   @override
@@ -196,7 +198,12 @@ class _AnimatedPieChartState extends State<AnimatedPieChart>
         );
 
         return GestureDetector(
-          onPanDown: (details) => _onPanDown(details, currentValues),
+          onPanDown: (details) {
+            _onPanDown(details, currentValues);
+            if (_pressedIndex != null && widget.onSegmentTapped != null) {
+               widget.onSegmentTapped!(_pressedIndex!);
+            }
+          },
           onPanEnd: (_) => _onPanEndOrCancel(),
           onPanCancel: _onPanEndOrCancel,
           child: Stack(

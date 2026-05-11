@@ -435,6 +435,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                 account,
                                 style: TextStyle(
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -443,7 +444,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                               Text(
                                 vm.balanceVisible ? Formatters.currency(accountBalance) : '₹ •••••',
                                 style: TextStyle(
-                                  color: isSelected ? AppConstants.primaryPurple : Colors.grey.shade600,
+                                  color: Theme.of(context).colorScheme.onSurface.withAlpha(200),
                                   fontSize: 12,
                                 ),
                                 maxLines: 1,
