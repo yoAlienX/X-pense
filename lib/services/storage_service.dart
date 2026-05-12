@@ -1,5 +1,7 @@
 // services/storage_service.dart
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
 
@@ -16,6 +18,7 @@ class StorageService {
   static const String _faceAuthEnabledKey = 'faceAuthEnabled';
   static const String _passcodeKey = 'passcode';
   static const String _securityQuestionsKey = 'securityQuestions';
+  static const String _onboardingCompleteKey = 'onboardingComplete';
 
   // Singleton pattern
   static final StorageService _instance = StorageService._internal();
@@ -142,6 +145,46 @@ class StorageService {
   /// Save show total balance preference
   Future<bool> saveShowTotalBalance(bool showTotal) async {
     return await prefs.setBool(_showTotalBalanceKey, showTotal);
+  }
+
+  // ==================== Onboarding Storage ====================
+
+  /// Check if onboarding is completed
+  Future<bool> hasCompletedOnboarding() async {
+    // Check SharedPreferences first
+    final bool prefsCompleted = prefs.getBool(_onboardingCompleteKey) ?? false;
+    if (prefsCompleted) return true;
+
+    // Fallback: Check local document directory for resilient flag file
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/.onboarding_flag');
+      if (await file.exists()) {
+        // Sync the preference back so it's correct next time
+        await saveOnboardingComplete();
+        return true;
+      }
+    } catch (e) {
+      print('Error checking resilient onboarding flag: $e');
+    }
+
+    return false;
+  }
+
+  /// Mark onboarding as completed
+  Future<bool> saveOnboardingComplete() async {
+    bool prefsResult = await prefs.setBool(_onboardingCompleteKey, true);
+
+    // Save resilient flag to file system to survive shared preferences clearing
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/.onboarding_flag');
+      await file.writeAsString('1');
+    } catch (e) {
+      print('Error saving resilient onboarding flag: $e');
+    }
+
+    return prefsResult;
   }
 
   // ==================== General Utilities ====================
