@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/csv_service.dart';
+import '../../services/storage_service.dart';
+import '../../services/crypto_service.dart';
 import '../../utils/constants.dart';
 import '../../viewmodels/app_lock_viewmodel.dart';
 import '../../models/transaction.dart';
@@ -836,6 +838,43 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           ),
         ),
         const SizedBox(height: 20),
+
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Encryption & Privacy',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Update your local encryption key for maximum privacy.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                    ),
+                    onPressed: () {
+                      _showUpdateCryptoKeyDialog(context);
+                    },
+                    icon: const Icon(Icons.key),
+                    label: const Text('Update Secret Key'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
       ],
     );
 
@@ -846,6 +885,76 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: content,
+    );
+  }
+
+  void _showUpdateCryptoKeyDialog(BuildContext context) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Update Encryption Key'),
+        content: TextField(
+          controller: ctrl,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'New Secret Key',
+            hintText: 'Leave empty to disable encryption',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newKey = ctrl.text.trim();
+              try {
+                // To apply the new key to existing data:
+                // 1. Fetch current transaction payload.
+                final txVm = context.read<TransactionViewModel>();
+                final txs = txVm.allTransactions.toList();
+
+                // 2. Set the new key.
+                final cryptoService = CryptoService();
+                await cryptoService.setSecretKey(newKey);
+
+                // 3. Resave transactions using the new key.
+                await txVm.addMultipleTransactions([]); // trigger a re-save natively via ViewModel or call save manually
+                final storageService = StorageService();
+                await storageService.saveTransactions(txs);
+
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    LiquidGlassSnackBar(
+                      context: context,
+                      message: 'Encryption key updated successfully',
+                      type: SnackBarType.success,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).clearSnackBars();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    LiquidGlassSnackBar(
+                      context: context,
+                      message: 'Failed to update key',
+                      type: SnackBarType.error,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
     );
   }
 

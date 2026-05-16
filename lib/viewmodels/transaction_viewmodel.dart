@@ -342,8 +342,9 @@ class TransactionViewModel extends ChangeNotifier {
     _accounts.remove(account);
     await _storage.saveAccounts(_accounts);
 
-    // Remove all transactions associated with the deleted account
-    _allTransactions.removeWhere((txn) => txn.account == account);
+    // We intentionally DO NOT modify or delete the historical transactions
+    // associated with the deleted account. This preserves the transaction history.
+    // The balances of other active accounts remain unaffected.
 
     await _recalculateAllBalances();
     _updateCurrentBalanceCache();

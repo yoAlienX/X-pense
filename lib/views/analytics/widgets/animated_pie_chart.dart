@@ -55,6 +55,9 @@ class _AnimatedPieChartState extends State<AnimatedPieChart>
   double get _outerRadius => widget.size / 2;
   double get _innerRadius => _outerRadius - widget.strokeWidth;
 
+  late AnimationController _entryController;
+  late Animation<double> _entryAnimation;
+
   @override
   void initState() {
     super.initState();
@@ -70,13 +73,24 @@ class _AnimatedPieChartState extends State<AnimatedPieChart>
       vsync: this,
       duration: const Duration(milliseconds: 150),
     );
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    );
+    _entryAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeInOutCubic,
+    );
 
-    _startValues = widget.segments.map((segment) => segment.value).toList();
+    _startValues = List<double>.filled(widget.segments.length, 0.0);
     _targetValues = widget.segments
         .map((segment) => segment.isSelected ? segment.value : 0.0)
         .toList();
 
     _controller.value = 1.0;
+
+    // Play entry animation once
+    _entryController.forward();
   }
 
   @override
@@ -126,6 +140,7 @@ class _AnimatedPieChartState extends State<AnimatedPieChart>
   void dispose() {
     _controller.dispose();
     _pressController.dispose();
+    _entryController.dispose();
     super.dispose();
   }
 
@@ -184,18 +199,39 @@ class _AnimatedPieChartState extends State<AnimatedPieChart>
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge([_animation, _pressController]),
+      animation: Listenable.merge([_animation, _pressController, _entryAnimation]),
       builder: (context, child) {
-        final List<double> currentValues = List.generate(
+        final List<double> baseValues = List.generate(
           _targetValues.length,
           (index) =>
               _startValues[index] +
               (_targetValues[index] - _startValues[index]) * _animation.value,
         );
-        final double currentTotal = currentValues.fold(
-          0.0,
-          (sum, value) => sum + value,
-        );
+
+        final double currentTotal = baseValues.fold(0.0, (sum, value) => sum + value);
+
+        // Calculate sequential entry values based on total sum percentage
+        final List<double> currentValues = List.generate(baseValues.length, (i) {
+            if (_entryAnimation.value == 1.0) return baseValues[i];
+
+            // Calculate what percentage of the total graph this segment represents
+            double sumBefore = 0;
+            for (int j = 0; j < i; j++) {
+                sumBefore += baseValues[j];
+            }
+
+            double startPct = currentTotal > 0 ? sumBefore / currentTotal : 0;
+            double endPct = currentTotal > 0 ? (sumBefore + baseValues[i]) / currentTotal : 0;
+
+            if (_entryAnimation.value <= startPct) {
+                return 0.0;
+            } else if (_entryAnimation.value >= endPct) {
+                return baseValues[i];
+            } else {
+                double localProgress = (_entryAnimation.value - startPct) / (endPct - startPct);
+                return baseValues[i] * localProgress;
+            }
+        });
 
         return GestureDetector(
           onPanDown: (details) {

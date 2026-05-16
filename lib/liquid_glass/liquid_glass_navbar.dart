@@ -203,7 +203,10 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
   }
 
   void _onTabRowDragReleaseComplete() {
+    // If the gesture drag exactly matches the active tab, bypass the pill re-animation
+    // but ensure state sync
     _skipNextPillAnimation = true;
+    _pillController.value = 1.0;
   }
 
   void _onTap(int index) {
@@ -583,6 +586,10 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
       // We just completed a drag-release. Signal parent to skip pill animation.
       widget.onDragReleaseComplete?.call();
       _pendingIndex = null;
+    } else if (widget.currentIndex != oldWidget.currentIndex && _pendingIndex == null) {
+      // A programmatic or tap navigation occurred, ensure no pending states conflict
+      _isReleasing = false;
+      _dragIndex = -1;
     }
   }
 
@@ -728,6 +735,10 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                             // Trigger navigation immediately; release animation is visual only.
                             widget.onTap(targetIndex);
 
+                            // The pill bounce drop effect (blob effect) logic
+                            // Add a little snap drop by reversing the hold scale quickly
+                            _holdController.reverse(from: 1.0);
+
                             _releaseController?.forward(from: 0).whenComplete(
                               () {
                                 if (!mounted) return;
@@ -737,8 +748,6 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                                 });
                               },
                             );
-
-                            _holdController.reverse();
                           };
                       },
                     ),

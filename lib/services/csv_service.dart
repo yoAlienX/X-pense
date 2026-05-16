@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/transaction.dart';
+import 'crypto_service.dart';
 
 class CsvService {
   // ==================== Import ====================
@@ -21,7 +22,14 @@ class CsvService {
     if (result == null) return null;
 
     final file = File(result.files.single.path!);
-    final input = file.readAsStringSync();
+    String input = file.readAsStringSync();
+
+    // Decrypt if it's an encrypted backup
+    final crypto = CryptoService();
+    if (crypto.hasSecretKey && input.contains(':')) {
+      input = crypto.decryptData(input);
+    }
+
     final List<List<dynamic>> csvData =
         const CsvToListConverter().convert(input);
 
@@ -47,6 +55,14 @@ class CsvService {
         }
         final category = csvCategory ?? autoCategorize(description);
 
+        String account = 'Canara Bank';
+        if (row.length > 8) {
+          final rawAccount = row[8].toString().trim();
+          if (rawAccount.isNotEmpty) {
+            account = rawAccount;
+          }
+        }
+
         parsed.add(Transaction(
           id: '${DateTime.now().millisecondsSinceEpoch}_$i',
           date: date,
@@ -57,6 +73,7 @@ class CsvService {
           balance: double.tryParse(row[5].toString()) ?? 0.0,
           type: row[6].toString(),
           category: category,
+          account: account,
         ));
       } catch (e) {
         // Skip malformed rows
@@ -75,7 +92,7 @@ class CsvService {
     bool isBackup = false,
   }) async {
     final List<List<dynamic>> rows = [
-      ['Date', 'Description', 'Reference', 'Debit', 'Credit', 'Balance', 'Type', 'Category'],
+      ['Date', 'Description', 'Reference', 'Debit', 'Credit', 'Balance', 'Type', 'Category', 'Account'],
       ...transactions.map((t) => [
             DateFormat('dd-MM-yyyy').format(t.date),
             t.description,
@@ -85,14 +102,23 @@ class CsvService {
             t.balance,
             t.type,
             t.category,
+            t.account,
           ]),
     ];
 
-    final csv = const ListToCsvConverter().convert(rows);
+    String csv = const ListToCsvConverter().convert(rows);
+    final crypto = CryptoService();
+    String fileExt = 'csv';
+
+    if (isBackup && crypto.hasSecretKey) {
+      csv = crypto.encryptData(csv);
+      fileExt = 'enc';
+    }
+
     final directory = await getTemporaryDirectory();
     final prefix = isBackup ? 'expense_tracker_backup' : 'expense_export';
     final fileName =
-        '${prefix}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.csv';
+        '${prefix}_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}.$fileExt';
     final file = File('${directory.path}/$fileName');
     await file.writeAsString(csv);
 

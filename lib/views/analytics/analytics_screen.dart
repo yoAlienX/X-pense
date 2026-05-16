@@ -8,6 +8,7 @@ import '../../utils/formatters.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
 import 'widgets/animated_pie_chart.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'widgets/animated_line_chart.dart';
 import 'widgets/zero_expense_chart.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -666,8 +667,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         const SizedBox(height: 16),
         SizedBox(
           height: 240,
-          child: LineChart(
-            LineChartData(
+          child: AnimatedLineChart(
+            chartData: LineChartData(
               gridData: const FlGridData(show: false),
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
