@@ -27,6 +27,7 @@ dependencies:
   motor: ^1.1.0
   oc_liquid_glass: ^0.2.1
   native_glass_navbar: ^1.0.1
+  encrypt: ^5.0.3
 
 dev_dependencies:
   flutter_test:

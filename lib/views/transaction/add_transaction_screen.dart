@@ -463,28 +463,41 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           ),
         ),
       ),
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppConstants.incomeGreen.withOpacity(0.4),
-              blurRadius: 15,
-              spreadRadius: 2,
-              offset: const Offset(0, 4),
-            ),
-          ],
+      floatingActionButton: Theme(
+        data: Theme.of(context).copyWith(
+          floatingActionButtonTheme: const FloatingActionButtonThemeData(
+            elevation: 0,
+            hoverElevation: 0,
+            focusElevation: 0,
+            highlightElevation: 0,
+          ),
         ),
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: dart_ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              color: AppConstants.incomeGreen.withOpacity(0.3),
-              child: FloatingActionButton(
-                onPressed: _submit,
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                child: const Icon(Icons.check, color: Colors.white, size: 28),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppConstants.incomeGreen.withOpacity(0.4),
+                blurRadius: 15,
+                spreadRadius: 2,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: BackdropFilter(
+              filter: dart_ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                color: AppConstants.incomeGreen.withOpacity(0.3),
+                child: FloatingActionButton(
+                  onPressed: _submit,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  hoverElevation: 0,
+                  focusElevation: 0,
+                  highlightElevation: 0,
+                  child: const Icon(Icons.check, color: Colors.white, size: 28),
+                ),
               ),
             ),
           ),

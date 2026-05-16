@@ -6,6 +6,7 @@ import '../../viewmodels/app_lock_viewmodel.dart';
 import '../../viewmodels/theme_viewmodel.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
 import '../../services/storage_service.dart';
+import '../../services/crypto_service.dart';
 import '../home/home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   // Security Setup Variables
   final TextEditingController _passcodeController = TextEditingController();
+  final TextEditingController _cryptoKeyController = TextEditingController();
 
   @override
   void dispose() {
@@ -32,6 +34,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _accountNameController.dispose();
     _balanceController.dispose();
     _passcodeController.dispose();
+    _cryptoKeyController.dispose();
     super.dispose();
   }
 
@@ -85,7 +88,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
     }
 
-    // 3. Save flag
+    // 3. Setup Encryption Key if provided
+    final cryptoKey = _cryptoKeyController.text.trim();
+    if (cryptoKey.isNotEmpty) {
+      final cryptoService = CryptoService();
+      await cryptoService.setSecretKey(cryptoKey);
+    }
+
+    // 4. Save flag
     await StorageService().saveOnboardingComplete();
 
     // 4. Navigate to Home Screen using blur-in transition
@@ -293,6 +303,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       },
                     ),
                   ],
+                ),
+                const SizedBox(height: 24),
+                const Text('Encryption Key (Optional)', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _cryptoKeyController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    hintText: 'e.g., from BitWarden',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.5),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Provide a private key to encrypt all your transactions locally and during CSV exports.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),

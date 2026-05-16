@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
+import 'crypto_service.dart';
 
 class StorageService {
   static const String _transactionsKey = 'transactions';
@@ -46,7 +47,11 @@ class StorageService {
     try {
       final jsonData = transactions.map((t) => t.toJson()).toList();
       final jsonString = jsonEncode(jsonData);
-      return await prefs.setString(_transactionsKey, jsonString);
+
+      final crypto = CryptoService();
+      final encryptedData = crypto.hasSecretKey ? crypto.encryptData(jsonString) : jsonString;
+
+      return await prefs.setString(_transactionsKey, encryptedData);
     } catch (e) {
       print('Error saving transactions: $e');
       return false;
@@ -56,12 +61,17 @@ class StorageService {
   /// Load transactions from storage
   Future<List<Transaction>> loadTransactions() async {
     try {
-      final jsonString = prefs.getString(_transactionsKey);
-      if (jsonString == null || jsonString.isEmpty) {
+      final storedData = prefs.getString(_transactionsKey);
+      if (storedData == null || storedData.isEmpty) {
         return [];
       }
 
-      final List<dynamic> jsonData = jsonDecode(jsonString);
+      final crypto = CryptoService();
+      final decryptedString = crypto.hasSecretKey && storedData.contains(':')
+          ? crypto.decryptData(storedData)
+          : storedData;
+
+      final List<dynamic> jsonData = jsonDecode(decryptedString);
       return jsonData.map((json) => Transaction.fromJson(json)).toList();
     } catch (e) {
       print('Error loading transactions: $e');

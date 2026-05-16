@@ -728,6 +728,10 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                             // Trigger navigation immediately; release animation is visual only.
                             widget.onTap(targetIndex);
 
+                            // The pill bounce drop effect (blob effect) logic
+                            // Add a little snap drop by reversing the hold scale quickly
+                            _holdController.reverse(from: 1.0);
+
                             _releaseController?.forward(from: 0).whenComplete(
                               () {
                                 if (!mounted) return;
@@ -737,8 +741,6 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                                 });
                               },
                             );
-
-                            _holdController.reverse();
                           };
                       },
                     ),
