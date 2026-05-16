@@ -489,6 +489,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               filter: dart_ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: Container(
                 color: AppConstants.incomeGreen.withOpacity(0.3),
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  splashColor: AppConstants.incomeGreen.withOpacity(0.5),
+                  highlightColor: Colors.transparent,
+                ),
                 child: FloatingActionButton(
                   onPressed: _submit,
                   backgroundColor: Colors.transparent,
@@ -496,7 +501,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   hoverElevation: 0,
                   focusElevation: 0,
                   highlightElevation: 0,
+                  splashColor: AppConstants.incomeGreen.withOpacity(0.5),
                   child: const Icon(Icons.check, color: Colors.white, size: 28),
+                ),
                 ),
               ),
             ),
