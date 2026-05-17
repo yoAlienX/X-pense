@@ -254,11 +254,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final themeVm = context.watch<ThemeViewModel>();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppConstants.primaryPurple.withOpacity(0.1),
               shape: BoxShape.circle,
@@ -318,14 +319,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Provide a private key to encrypt all your transactions locally and during CSV exports.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+                  const Text(
+                    'Provide a private key to encrypt all your transactions locally and during CSV exports.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -452,23 +454,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget _buildFeaturesShowcaseStep() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.auto_awesome, size: 64, color: Color(0xFFFCAC12)),
-          const SizedBox(height: 24),
-          const Text(
-            'You\'re All Set!',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          _buildFeatureRow(Icons.pie_chart_outline, 'Interactive Analytics', 'Visualize your spending with Doughnut & Line charts.'),
-          const SizedBox(height: 20),
-          _buildFeatureRow(Icons.file_download_outlined, 'CSV Import/Export', 'Backup and import your transaction history anytime.'),
-          const SizedBox(height: 20),
-          _buildFeatureRow(Icons.add_circle_outline, 'Quick Add', 'Use the floating + button to log expenses instantly.'),
-        ],
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.auto_awesome, size: 64, color: Color(0xFFFCAC12)),
+            const SizedBox(height: 24),
+            const Text(
+              'You\'re All Set!',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            _buildFeatureRow(Icons.pie_chart_outline, 'Interactive Analytics', 'Visualize your spending with Doughnut & Line charts.'),
+            const SizedBox(height: 20),
+            _buildFeatureRow(Icons.file_download_outlined, 'CSV Import/Export', 'Backup and import your transaction history anytime.'),
+            const SizedBox(height: 20),
+            _buildFeatureRow(Icons.add_circle_outline, 'Quick Add', 'Use the floating + button to log expenses instantly.'),
+            const SizedBox(height: 40),
+          ],
+        ),
       ),
     );
   }
