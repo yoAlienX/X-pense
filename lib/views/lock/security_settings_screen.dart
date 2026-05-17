@@ -8,13 +8,17 @@ import '../../services/storage_service.dart';
 import '../../services/crypto_service.dart';
 import '../../utils/constants.dart';
 import '../../viewmodels/app_lock_viewmodel.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../models/transaction.dart';
 import '../../utils/formatters.dart';
+import '../../services/cloud_backup_service.dart';
 import '../../viewmodels/theme_viewmodel.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
 import '../widgets/liquid_glass_snackbar.dart';
 import '../widgets/radial_theme_switch.dart';
 import 'lock_overlay_dialog.dart';
+import 'cloud_backup_helpers.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   const SecuritySettingsScreen({Key? key, this.embedInHome = false})
@@ -724,6 +728,52 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           ),
         ),
         const SizedBox(height: 20),
+        // ── Cloud Backups Section ────────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Cloud Backups',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Securely sync encrypted backups to your Google Drive or personal Telegram bot.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 16),
+
+                // Telegram Setup
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => showTelegramSetupDialog(context),
+                    icon: const Icon(Icons.telegram, color: Colors.blue),
+                    label: const Text('Backup via Telegram Bot'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Google Setup
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => handleGoogleBackup(context),
+                    icon: const Icon(Icons.cloud_upload_outlined, color: Colors.redAccent),
+                    label: const Text('Backup to Google Drive'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+
         // ── Clear All Data Section ────────────────────────────────────────
         Card(
           child: Padding(
@@ -739,10 +789,26 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Permanently delete all transactions and data',
+                  'Clear cache or permanently delete all transactions and data',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 16),
+
+                // Archive Old Data
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.surface,
+                    ),
+                    onPressed: () => _showArchiveDialog(context),
+                    icon: const Icon(Icons.archive_outlined),
+                    label: const Text('Archive Old Transactions'),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Clear All Data
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -965,6 +1031,77 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
       showDragHandle: true,
       builder: (_) => const _AccountManagerSheet(),
     );
+  }
+
+  void _showArchiveDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Archive Old Transactions'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'This will export transactions older than the selected period and replace them with a single Carry-Forward balance transaction.',
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                title: const Text('Older than 3 months'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _performArchive(context, 3);
+                },
+              ),
+              ListTile(
+                title: const Text('Older than 6 months'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _performArchive(context, 6);
+                },
+              ),
+              ListTile(
+                title: const Text('Older than 1 year'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _performArchive(context, 12);
+                },
+              ),
+              ListTile(
+                title: const Text('Older than 2 years'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _performArchive(context, 24);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _performArchive(BuildContext context, int months) async {
+    final cutoffDate = DateTime.now().subtract(Duration(days: 30 * months));
+    final txVm = context.read<TransactionViewModel>();
+    await txVm.archiveOldTransactions(cutoffDate);
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        LiquidGlassSnackBar(
+          context: context,
+          message: 'Old transactions archived successfully',
+          type: SnackBarType.success,
+        ),
+      );
+    }
   }
 
   Future<void> _showSetupPasscodeDialog(

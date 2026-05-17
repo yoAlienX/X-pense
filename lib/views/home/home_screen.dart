@@ -511,7 +511,8 @@ class _HomeScreenState extends State<HomeScreen> {
     TransactionViewModel vm,
     bool isKeyboardOpen,
   ) {
-    final filteredTransactions = vm.filteredTransactions;
+    final paginatedTransactions = vm.paginatedTransactions;
+    final totalFilteredCount = vm.filteredTransactions.length;
     final compactFilterLayout = MediaQuery.of(context).size.width - 32 < 430;
     final filterOverlayHeight = compactFilterLayout
         ? _kFilterOverlayHeightCompact
@@ -526,7 +527,13 @@ class _HomeScreenState extends State<HomeScreen> {
       onRefresh: () => vm.initialize(),
       color: AppConstants.primaryPurple,
       child: NotificationListener<ScrollNotification>(
-        onNotification: _handleScrollNotification,
+        onNotification: (ScrollNotification notification) {
+          if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 200) {
+            // Reached near the bottom, load more
+            vm.loadMoreTransactions();
+          }
+          return _handleScrollNotification(notification);
+        },
         child: CustomScrollView(
           controller: _txScrollController,
           physics: const AlwaysScrollableScrollPhysics(
@@ -578,7 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 6)),
 
-            if (filteredTransactions.isEmpty)
+            if (paginatedTransactions.isEmpty)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
@@ -594,7 +601,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) {
-                      final t = filteredTransactions[i];
+                      if (i == paginatedTransactions.length) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Center(
+                            child: CircularProgressIndicator(color: AppConstants.primaryPurple),
+                          ),
+                        );
+                      }
+
+                      final t = paginatedTransactions[i];
                       return RepaintBoundary(
                         child: TransactionCard(
                           transaction: t,
@@ -647,7 +663,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       );
                     },
-                    childCount: filteredTransactions.length,
+                    childCount: paginatedTransactions.length < totalFilteredCount
+                        ? paginatedTransactions.length + 1
+                        : paginatedTransactions.length,
                     addAutomaticKeepAlives: false,
                     addRepaintBoundaries: true,
                     addSemanticIndexes: false,
