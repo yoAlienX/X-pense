@@ -254,11 +254,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final themeVm = context.watch<ThemeViewModel>();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: AppConstants.primaryPurple.withOpacity(0.1),
               shape: BoxShape.circle,
@@ -318,14 +319,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Provide a private key to encrypt all your transactions locally and during CSV exports.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+                  const Text(
+                    'Provide a private key to encrypt all your transactions locally and during CSV exports.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
