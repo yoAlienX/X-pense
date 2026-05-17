@@ -9,12 +9,20 @@ import 'viewmodels/theme_viewmodel.dart';
 import 'viewmodels/transaction_viewmodel.dart';
 import 'views/home/home_screen.dart';
 import 'views/lock/lock_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'views/loading_screen.dart';
 import 'views/widgets/theme_switcher.dart';
 import 'views/onboarding/onboarding_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase init failed: $e');
+  }
+
   await StorageService().init();
   runApp(const ExpenseTrackerApp());
 }

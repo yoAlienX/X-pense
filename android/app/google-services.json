@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "965235542236",
+    "project_id": "x-pense-app",
+    "storage_bucket": "x-pense-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:965235542236:android:c89d5ca670a37659904c19",
+        "android_client_info": {
+          "package_name": "com.example.x_pense"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "965235542236-vpt8j1623m8cdi46v521h9e9e3dgcsn1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3GUG9-59WrcsBr-u3McIRUjb9f9a_17Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "965235542236-vpt8j1623m8cdi46v521h9e9e3dgcsn1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

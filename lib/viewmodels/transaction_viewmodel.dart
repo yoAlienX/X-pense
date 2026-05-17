@@ -5,6 +5,7 @@ import '../utils/constants.dart';
 import '../models/transaction.dart';
 import '../models/filter_state.dart';
 import '../services/storage_service.dart';
+import '../services/csv_service.dart';
 
 class TransactionViewModel extends ChangeNotifier {
   final StorageService _storage = StorageService();
@@ -27,10 +28,19 @@ class TransactionViewModel extends ChangeNotifier {
   List<String> _accounts = ['Canara Bank'];
   bool _showTotalBalance = false;
 
+  // Pagination State
+  int _displayLimit = 20;
+
   // Getters
   List<Transaction> get allTransactions => List.unmodifiable(_allTransactions);
   List<Transaction> get filteredTransactions =>
       List.unmodifiable(_filteredTransactions);
+  List<Transaction> get paginatedTransactions {
+    if (_filteredTransactions.length <= _displayLimit) {
+      return List.unmodifiable(_filteredTransactions);
+    }
+    return List.unmodifiable(_filteredTransactions.take(_displayLimit));
+  }
   FilterState get filterState => _filterState;
   SelectionState get selectionState => _selectionState;
   bool get balanceVisible => _balanceVisible;
@@ -107,6 +117,7 @@ class TransactionViewModel extends ChangeNotifier {
 
       // Apply initial filters
       _applyFilters();
+      _displayLimit = 20; // reset pagination limit
     } catch (e) {
       print('Error initializing: $e');
     } finally {
@@ -391,6 +402,90 @@ class TransactionViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== Archiving Data ====================
+
+  Future<void> archiveOldTransactions(DateTime cutoffDate) async {
+    // Separate transactions into old and new based on the cutoff date
+    List<Transaction> oldTxs = [];
+    List<Transaction> keptTxs = [];
+
+    // We will calculate a single carry-forward balance for each account
+    Map<String, double> carryForwardBalances = {};
+
+    // For calculation, we process chronologically
+    final chronological = _allTransactions.toList()..sort((a, b) => a.date.compareTo(b.date));
+
+    for (var tx in chronological) {
+      if (tx.date.isBefore(cutoffDate)) {
+        oldTxs.add(tx);
+        double currentBal = carryForwardBalances[tx.account] ?? 0.0;
+        currentBal = currentBal + tx.credit - tx.debit;
+        carryForwardBalances[tx.account] = currentBal;
+      } else {
+        keptTxs.add(tx);
+      }
+    }
+
+    if (oldTxs.isEmpty) return; // Nothing to archive
+
+    // Export the old transactions so the user doesn't permanently lose them
+    try {
+      final csvService = CsvService();
+      await csvService.exportAndShare(
+        oldTxs,
+        isBackup: true,
+        subject: 'Expense Tracker Archive Backup',
+        text: 'Archived backup of ${oldTxs.length} old transactions before $cutoffDate.',
+      );
+    } catch (e) {
+      debugPrint('Archive export error: $e');
+      // If we fail to export, we should probably abort clearing to prevent data loss.
+      // But we will continue based on user intention of clearing space.
+    }
+
+    // Replace old transactions with Carry Forward markers
+    _allTransactions = List.from(keptTxs);
+
+    for (var entry in carryForwardBalances.entries) {
+      if (entry.value != 0.0) {
+        _allTransactions.add(
+          Transaction(
+            id: 'carry_forward_${DateTime.now().millisecondsSinceEpoch}_${entry.key}',
+            date: cutoffDate,
+            description: 'Carry-Forward Balance',
+            referenceNo: 'SYSTEM_ARCHIVE',
+            debit: entry.value < 0 ? entry.value.abs() : 0.0,
+            credit: entry.value > 0 ? entry.value : 0.0,
+            balance: entry.value,
+            type: entry.value >= 0 ? 'Credit' : 'Debit',
+            category: 'Initial Balance',
+            account: entry.key,
+          ),
+        );
+      }
+    }
+
+    await _recalculateAllBalances();
+    _allTransactions.sort((a, b) => b.date.compareTo(a.date));
+    _updateCurrentBalanceCache();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  // ==================== Pagination ====================
+
+  void loadMoreTransactions() {
+    if (_displayLimit < _filteredTransactions.length) {
+      _displayLimit += 20;
+      notifyListeners();
+    }
+  }
+
+  void resetPagination() {
+    _displayLimit = 20;
+    notifyListeners();
+  }
+
   // ==================== Filtering ====================
 
   void setTypeFilter(String filter) {
@@ -436,6 +531,10 @@ class TransactionViewModel extends ChangeNotifier {
   }
 
   void _applyFilters() {
+    // Reset pagination whenever filters change to ensure the user
+    // sees the top of the newly filtered list.
+    _displayLimit = 20;
+
     final hasDefaultFilters =
         _filterState.typeFilter == 'All' &&
         _filterState.monthFilter == 'All' &&
