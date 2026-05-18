@@ -8,11 +8,15 @@ import '../widgets/liquid_glass_snackbar.dart';
 
 Future<void> showTelegramSetupDialog(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
+  final backupService = CloudBackupService();
+  final existingToken = backupService.telegramBotToken;
+
   await showDialog<void>(
     context: context,
     builder: (ctx) {
       bool isVerifying = false;
-      String tokenInput = '';
+      String tokenInput = existingToken; // pre-fill if it exists
+
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
@@ -20,15 +24,22 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (existingToken.isNotEmpty) ...[
+                    const Text('✓ A bot is already linked to your account. You can backup immediately or change the token below.',
+                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 15),
+                  ],
                   const Text(
                     '1. Create a bot using @BotFather on Telegram.\n'
                     '2. Paste the Bot Token below.\n'
                     '3. Open your bot on Telegram and send a "hello" message to it.\n'
-                    '4. Tap "Verify & Backup".',
+                    '4. Tap "Backup".',
                   ),
                   const SizedBox(height: 20),
-                  TextField(
+                  TextFormField(
+                    initialValue: tokenInput,
                     onChanged: (val) => tokenInput = val,
                     decoration: const InputDecoration(
                       labelText: 'Bot Token',
@@ -69,7 +80,6 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
                   }
 
                   setState(() => isVerifying = true);
-                  final backupService = CloudBackupService();
                   await backupService.setTelegramBotToken(tokenInput.trim());
 
                   final chatId = await backupService.fetchTelegramChatId();
@@ -103,7 +113,7 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
                 },
                 child: isVerifying
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Verify & Backup'),
+                    : Text(existingToken.isNotEmpty && tokenInput == existingToken ? 'Backup Now' : 'Verify & Backup'),
               ),
             ],
           );

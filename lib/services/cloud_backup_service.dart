@@ -23,7 +23,7 @@ class CloudBackupService {
   );
 
   // Gets Telegram Bot token provided by the user in settings
-  String get _telegramBotToken => StorageService().prefs.getString('telegram_bot_token') ?? '';
+  String get telegramBotToken => StorageService().prefs.getString('telegram_bot_token') ?? '';
 
   Future<void> setTelegramBotToken(String token) async {
     await StorageService().prefs.setString('telegram_bot_token', token);
@@ -84,7 +84,7 @@ class CloudBackupService {
   // ==================== Telegram Integration ====================
 
   Future<String?> fetchTelegramChatId() async {
-    final token = _telegramBotToken;
+    final token = telegramBotToken;
     if (token.isEmpty) return null;
 
     try {
@@ -109,7 +109,7 @@ class CloudBackupService {
   }
 
   Future<bool> backupToTelegram(List<model.Transaction> transactions) async {
-    final token = _telegramBotToken;
+    final token = telegramBotToken;
     if (token.isEmpty) return false;
 
     final chatId = StorageService().prefs.getString('telegram_chat_id');
