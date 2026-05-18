@@ -759,11 +759,36 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () async {
                           final txVm = context.read<TransactionViewModel>();
+                          final crypto = CryptoService();
+
+                          if (!crypto.hasSecretKey) {
+                            final proceed = await showDialog<bool>(
+                              context: context,
+                              builder: (c) => AlertDialog(
+                                title: const Text('Unencrypted Backup'),
+                                content: const Text(
+                                  'You have not set up a Secret Encryption Key. '
+                                  'Your export will be saved in PLAIN TEXT as a standard .csv file.\n\n'
+                                  'Do you want to proceed without encryption?'
+                                ),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(c, true),
+                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                    child: const Text('Proceed Anyway'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (proceed != true) return;
+                          }
+
                           try {
                             final csvService = CsvService();
                             await csvService.exportAndShare(
                               txVm.allTransactions.toList(),
-                              isBackup: true,
+                              isBackup: true, // Will automatically use .enc if crypto is set
                               subject: 'Expense Tracker Full Backup',
                               text:
                                   'Complete backup of ${txVm.allTransactions.length} transactions.',
@@ -781,7 +806,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                           }
                         },
                         icon: const Icon(Icons.upload_outlined),
-                        label: const Text('Export CSV'),
+                        label: const Text('Export Backup'),
                       ),
                     ),
                   ],

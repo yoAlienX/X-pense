@@ -253,25 +253,80 @@ Future<void> handleGoogleBackup(BuildContext context) async {
 }
 
 Future<void> handleTelegramRestore(BuildContext context) async {
+  final txVm = context.read<TransactionViewModel>();
+  final backupService = CloudBackupService();
+
   showDialog(
     context: context,
+    barrierDismissible: false,
     builder: (ctx) {
       return AlertDialog(
-        title: const Text('Restore from Telegram'),
-        content: const Text(
-          'Because Telegram bots cannot query file history automatically without knowing the exact File ID, '
-          'you must open your Telegram app, download the backup CSV/ENC file sent by your bot, '
-          'and then use the "Import CSV" option in the previous menu to restore your data.',
+        content: Row(
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text("Downloading from Telegram..."),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Got it'),
-          ),
-        ],
       );
     },
   );
+
+  try {
+    final data = await backupService.restoreFromTelegram();
+    if (data == null) throw Exception('No data returned.');
+
+    if (context.mounted) {
+      Navigator.of(context).pop(); // Close downloading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return AlertDialog(
+            content: Row(
+              children: const [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("Decrypting & Restoring..."),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    final csvService = CsvService();
+    final parsed = await csvService.importFromData(data);
+
+    if (context.mounted) {
+      Navigator.of(context).pop(); // Close restoring dialog
+      if (parsed != null && parsed.isNotEmpty) {
+        await txVm.addMultipleTransactions(parsed);
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          LiquidGlassSnackBar(
+            context: context,
+            message: 'Successfully restored ${parsed.length} transactions!',
+            type: SnackBarType.success,
+          ),
+        );
+      } else {
+        throw Exception('Backup file was empty or corrupted.');
+      }
+    }
+  } catch (e) {
+    if (context.mounted) {
+      Navigator.of(context).pop(); // Ensure dialog is closed
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        LiquidGlassSnackBar(
+          context: context,
+          message: 'Restore failed: ${e.toString().replaceAll('Exception:', '').trim()}',
+          type: SnackBarType.error,
+        ),
+      );
+    }
+  }
 }
 
 Future<void> handleGoogleRestore(BuildContext context) async {
