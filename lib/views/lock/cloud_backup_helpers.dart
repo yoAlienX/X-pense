@@ -117,18 +117,28 @@ Future<void> handleGoogleBackup(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
   final backupService = CloudBackupService();
 
-  ScaffoldMessenger.of(context).clearSnackBars();
-  ScaffoldMessenger.of(context).showSnackBar(
-    LiquidGlassSnackBar(
-      context: context,
-      message: 'Connecting to Google...',
-      type: SnackBarType.info,
-    ),
+  // Show progress dialog instead of generic snackbars
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      return AlertDialog(
+        content: Row(
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text("Connecting to Google..."),
+          ],
+        ),
+      );
+    },
   );
 
   final user = await backupService.signInWithGoogle();
+
   if (user == null) {
     if (context.mounted) {
+      Navigator.of(context).pop(); // Close dialog
       ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         LiquidGlassSnackBar(
@@ -142,24 +152,33 @@ Future<void> handleGoogleBackup(BuildContext context) async {
   }
 
   if (context.mounted) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      LiquidGlassSnackBar(
-        context: context,
-        message: 'Uploading backup...',
-        type: SnackBarType.info,
-      ),
+    Navigator.of(context).pop(); // Close connecting dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          content: Row(
+            children: const [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text("Uploading to Firestore..."),
+            ],
+          ),
+        );
+      },
     );
   }
 
   final success = await backupService.backupToFirebase(txVm.allTransactions);
 
   if (context.mounted) {
+    Navigator.of(context).pop(); // Close uploading dialog
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       LiquidGlassSnackBar(
         context: context,
-        message: success ? 'Successfully backed up to Firebase!' : 'Failed to upload backup.',
+        message: success ? 'Successfully backed up to Firestore!' : 'Failed to upload backup.',
         type: success ? SnackBarType.success : SnackBarType.error,
       ),
     );
