@@ -252,6 +252,28 @@ Future<void> handleGoogleBackup(BuildContext context) async {
   }
 }
 
+Future<void> handleTelegramRestore(BuildContext context) async {
+  showDialog(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: const Text('Restore from Telegram'),
+        content: const Text(
+          'Because Telegram bots cannot query file history automatically without knowing the exact File ID, '
+          'you must open your Telegram app, download the backup CSV/ENC file sent by your bot, '
+          'and then use the "Import CSV" option in the previous menu to restore your data.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Got it'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 Future<void> handleGoogleRestore(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
   final backupService = CloudBackupService();
