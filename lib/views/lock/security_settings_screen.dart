@@ -19,6 +19,8 @@ import '../widgets/liquid_glass_snackbar.dart';
 import '../widgets/radial_theme_switch.dart';
 import 'lock_overlay_dialog.dart';
 import 'cloud_backup_helpers.dart';
+import '../backup/cloud_backup_screen.dart';
+import '../profile/profile_screen.dart';
 
 class SecuritySettingsScreen extends StatefulWidget {
   const SecuritySettingsScreen({Key? key, this.embedInHome = false})
@@ -391,10 +393,71 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<AppLockViewModel>();
+    final cloudBackupService = CloudBackupService();
+    final user = cloudBackupService.currentUser;
+    final botToken = cloudBackupService.telegramBotToken;
 
     final content = ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Profile Header
+        Center(
+          child: GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen()),
+              );
+            },
+            child: Column(
+              children: [
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  children: [
+                    CircleAvatar(
+                      radius: 45,
+                      backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+                      child: user == null
+                          ? Text(
+                              botToken.isNotEmpty ? 'T' : '?',
+                              style: TextStyle(
+                                fontSize: 36,
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
+                    ),
+                    if (user != null || botToken.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.cloud_done, size: 16, color: Colors.white),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  user?.displayName ?? (botToken.isNotEmpty ? 'Telegram Connected' : 'Not Signed In'),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                if (user?.email != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    user!.email!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  ),
+                ],
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+
         // ── Theme Section ─────────────────────────────────────────────────
         Card(
           child: Padding(
@@ -730,81 +793,36 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         const SizedBox(height: 20),
         // ── Cloud Backups Section ────────────────────────────────────────
         Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Cloud Backups',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Securely sync encrypted backups to your Google Drive or personal Telegram bot.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 16),
-
-                // Telegram Setup
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => showTelegramSetupDialog(context),
-                    icon: const Icon(Icons.telegram, color: Colors.blue),
-                    label: const Text('Backup via Telegram Bot'),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Google Setup
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => handleGoogleBackup(context),
-                    icon: const Icon(Icons.cloud_upload_outlined, color: Colors.redAccent),
-                    label: const Text('Backup to Google Drive'),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Google Restore
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => handleGoogleRestore(context),
-                    icon: const Icon(Icons.cloud_download_outlined, color: Colors.green),
-                    label: const Text('Restore from Google Drive'),
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // Google Sign Out Switch User
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final backupService = CloudBackupService();
-                      await backupService.signOut();
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          LiquidGlassSnackBar(
-                            context: context,
-                            message: 'Signed out of Google account. You can now login with a different one.',
-                            type: SnackBarType.info,
-                          ),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.logout, color: Colors.grey),
-                    label: const Text('Switch Google Account', style: TextStyle(color: Colors.grey)),
-                  ),
-                ),
-              ],
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(20),
+            leading: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.cloud_sync_outlined, color: Colors.blue),
             ),
+            title: Text(
+              'Cloud Backup & Restore',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                'Sync or restore encrypted backups to Google Drive or Telegram.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CloudBackupScreen()),
+              );
+            },
           ),
         ),
         const SizedBox(height: 20),
