@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/cloud_backup_service.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
 import '../widgets/liquid_glass_snackbar.dart';
+import '../../services/crypto_service.dart';
+import '../../services/csv_service.dart';
 
 Future<void> showTelegramSetupDialog(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
@@ -79,6 +81,30 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
                     return;
                   }
 
+                  final crypto = CryptoService();
+                  if (!crypto.hasSecretKey) {
+                    final proceed = await showDialog<bool>(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('Unencrypted Backup Warning'),
+                        content: const Text(
+                          'You have not set up a Secret Encryption Key. '
+                          'Proceeding will upload your transactions to Telegram in PLAIN TEXT.\n\n'
+                          'Do you want to proceed without encryption?'
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(c, true),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                            child: const Text('Proceed Anyway'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (proceed != true) return;
+                  }
+
                   setState(() => isVerifying = true);
                   await backupService.setTelegramBotToken(tokenInput.trim());
 
@@ -126,6 +152,37 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
 Future<void> handleGoogleBackup(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
   final backupService = CloudBackupService();
+  final crypto = CryptoService();
+
+  // Security Warning if not encrypted
+  if (!crypto.hasSecretKey) {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Unencrypted Backup Warning'),
+          content: const Text(
+            'You have not set up a Secret Encryption Key in the Security Settings. '
+            'Proceeding will upload your transactions in PLAIN TEXT to the cloud.\n\n'
+            'Do you want to proceed without encryption?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('Proceed Anyway'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (proceed != true) return;
+  }
 
   // Show progress dialog instead of generic snackbars
   showDialog(
@@ -192,5 +249,118 @@ Future<void> handleGoogleBackup(BuildContext context) async {
         type: success ? SnackBarType.success : SnackBarType.error,
       ),
     );
+  }
+}
+
+Future<void> handleGoogleRestore(BuildContext context) async {
+  final txVm = context.read<TransactionViewModel>();
+  final backupService = CloudBackupService();
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) {
+      return AlertDialog(
+        content: Row(
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(width: 20),
+            Text("Connecting to Google..."),
+          ],
+        ),
+      );
+    },
+  );
+
+  final user = await backupService.signInWithGoogle();
+
+  if (user == null) {
+    if (context.mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        LiquidGlassSnackBar(
+          context: context,
+          message: 'Google Sign-In failed or cancelled.',
+          type: SnackBarType.error,
+        ),
+      );
+    }
+    return;
+  }
+
+  if (context.mounted) {
+    Navigator.of(context).pop();
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          content: Row(
+            children: const [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text("Downloading from Firestore..."),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  try {
+    final data = await backupService.restoreFromFirebase();
+    if (data == null) throw Exception('No data returned.');
+
+    if (context.mounted) {
+      Navigator.of(context).pop(); // Close downloading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          return AlertDialog(
+            content: Row(
+              children: const [
+                CircularProgressIndicator(),
+                SizedBox(width: 20),
+                Text("Decrypting & Restoring..."),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    final csvService = CsvService();
+    final parsed = await csvService.importFromData(data);
+
+    if (context.mounted) {
+      Navigator.of(context).pop(); // Close restoring dialog
+      if (parsed != null && parsed.isNotEmpty) {
+        await txVm.addMultipleTransactions(parsed);
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          LiquidGlassSnackBar(
+            context: context,
+            message: 'Successfully restored ${parsed.length} transactions!',
+            type: SnackBarType.success,
+          ),
+        );
+      } else {
+        throw Exception('Backup file was empty or corrupted.');
+      }
+    }
+  } catch (e) {
+    if (context.mounted) {
+      Navigator.of(context).pop(); // Ensure dialog is closed
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        LiquidGlassSnackBar(
+          context: context,
+          message: 'Restore failed: ${e.toString().replaceAll('Exception:', '').trim()}',
+          type: SnackBarType.error,
+        ),
+      );
+    }
   }
 }
