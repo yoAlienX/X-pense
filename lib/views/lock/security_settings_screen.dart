@@ -768,6 +768,41 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                     label: const Text('Backup to Google Drive'),
                   ),
                 ),
+                const SizedBox(height: 10),
+
+                // Google Restore
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => handleGoogleRestore(context),
+                    icon: const Icon(Icons.cloud_download_outlined, color: Colors.green),
+                    label: const Text('Restore from Google Drive'),
+                  ),
+                ),
+
+                const SizedBox(height: 10),
+
+                // Google Sign Out Switch User
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final backupService = CloudBackupService();
+                      await backupService.signOut();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          LiquidGlassSnackBar(
+                            context: context,
+                            message: 'Signed out of Google account. You can now login with a different one.',
+                            type: SnackBarType.info,
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.logout, color: Colors.grey),
+                    label: const Text('Switch Google Account', style: TextStyle(color: Colors.grey)),
+                  ),
+                ),
               ],
             ),
           ),

@@ -22,12 +22,25 @@ class CsvService {
     if (result == null) return null;
 
     final file = File(result.files.single.path!);
-    String input = file.readAsStringSync();
+    final input = file.readAsStringSync();
+    return importFromData(input);
+  }
 
+  /// Parse a CSV string directly into transactions. Used by cloud restores.
+  Future<List<Transaction>?> importFromData(String input) async {
     // Decrypt if it's an encrypted backup
     final crypto = CryptoService();
-    if (crypto.hasSecretKey && input.contains(':')) {
-      input = crypto.decryptData(input);
+    if (input.contains(':') && input.length > 50) {
+      // Very basic heuristic for encrypted payloads vs raw CSVs.
+      // If it contains an IV delimiter, it needs decryption.
+      if (!crypto.hasSecretKey) {
+        throw Exception('Backup is encrypted, but no secret key is configured in Security Settings.');
+      }
+      try {
+        input = crypto.decryptData(input);
+      } catch (e) {
+        throw Exception('Decryption failed. Invalid Secret Key.');
+      }
     }
 
     final List<List<dynamic>> csvData =

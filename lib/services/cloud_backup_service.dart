@@ -81,6 +81,32 @@ class CloudBackupService {
     }
   }
 
+  Future<String?> restoreFromFirebase() async {
+    final user = currentUser;
+    if (user == null) throw Exception('Not signed in to Google.');
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!doc.exists) {
+        throw Exception('No cloud backup found on this account.');
+      }
+
+      final data = doc.data();
+      if (data == null || !data.containsKey('backupData')) {
+        throw Exception('Backup data is empty or corrupted.');
+      }
+
+      return data['backupData'] as String;
+    } catch (e) {
+      debugPrint('Firebase Restore Error: $e');
+      throw Exception(e.toString());
+    }
+  }
+
   // ==================== Telegram Integration ====================
 
   Future<String?> fetchTelegramChatId() async {
