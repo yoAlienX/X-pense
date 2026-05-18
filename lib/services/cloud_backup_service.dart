@@ -157,10 +157,56 @@ class CloudBackupService {
         ..files.add(await http.MultipartFile.fromPath('document', file.path));
 
       final response = await request.send();
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        final respStr = await response.stream.bytesToString();
+        final data = jsonDecode(respStr);
+        final fileId = data['result']?['document']?['file_id'];
+        if (fileId != null) {
+          await StorageService().prefs.setString('telegram_latest_file_id', fileId);
+        }
+        return true;
+      }
+      return false;
     } catch (e) {
       debugPrint('Telegram Backup Error: $e');
       return false;
+    }
+  }
+
+  Future<String?> restoreFromTelegram() async {
+    final token = telegramBotToken;
+    if (token.isEmpty) throw Exception('No Telegram Bot configured.');
+
+    final fileId = StorageService().prefs.getString('telegram_latest_file_id');
+    if (fileId == null || fileId.isEmpty) {
+      throw Exception('No previous backup was sent using this app. Please import the CSV file manually.');
+    }
+
+    try {
+      // Step 1: Get the file path from Telegram
+      final getFileUrl = Uri.parse('https://api.telegram.org/bot$token/getFile?file_id=$fileId');
+      final pathResponse = await http.get(getFileUrl);
+
+      if (pathResponse.statusCode != 200) {
+        throw Exception('Failed to locate file on Telegram servers.');
+      }
+
+      final pathData = jsonDecode(pathResponse.body);
+      final filePath = pathData['result']?['file_path'];
+      if (filePath == null) throw Exception('Telegram file path is null.');
+
+      // Step 2: Download the file content
+      final downloadUrl = Uri.parse('https://api.telegram.org/file/bot$token/$filePath');
+      final downloadResponse = await http.get(downloadUrl);
+
+      if (downloadResponse.statusCode != 200) {
+        throw Exception('Failed to download the backup file.');
+      }
+
+      return downloadResponse.body;
+    } catch (e) {
+      debugPrint('Telegram Restore Error: $e');
+      throw Exception(e.toString());
     }
   }
 

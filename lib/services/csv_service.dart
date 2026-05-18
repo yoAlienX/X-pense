@@ -17,7 +17,7 @@ class CsvService {
   Future<List<Transaction>?> importFromFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['csv'],
+      allowedExtensions: ['csv', 'enc'],
     );
     if (result == null) return null;
 
@@ -28,16 +28,21 @@ class CsvService {
 
   /// Parse a CSV string directly into transactions. Used by cloud restores.
   Future<List<Transaction>?> importFromData(String input) async {
+    input = input.trim();
+
     // Decrypt if it's an encrypted backup
     final crypto = CryptoService();
-    if (input.contains(':') && input.length > 50) {
-      // Very basic heuristic for encrypted payloads vs raw CSVs.
-      // If it contains an IV delimiter, it needs decryption.
+    // Encrypted payloads are base64 strings separated by a colon
+    if (input.contains(':') && !input.contains(',')) {
       if (!crypto.hasSecretKey) {
         throw Exception('Backup is encrypted, but no secret key is configured in Security Settings.');
       }
       try {
         input = crypto.decryptData(input);
+        if (input.contains(':') && !input.contains(',')) {
+          // If it still doesn't look like CSV after decryption, key was likely wrong but decrypt didn't throw
+          throw Exception('Decryption failed. Invalid Secret Key.');
+        }
       } catch (e) {
         throw Exception('Decryption failed. Invalid Secret Key.');
       }
