@@ -4,12 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:csv/csv.dart';
 import 'package:intl/intl.dart';
 
-import '../models/transaction.dart';
+import '../models/transaction.dart' as model;
 import 'crypto_service.dart';
 import 'storage_service.dart';
 
@@ -57,20 +57,23 @@ class CloudBackupService {
 
   User? get currentUser => FirebaseAuth.instance.currentUser;
 
-  Future<bool> backupToFirebase(List<Transaction> transactions) async {
+  Future<bool> backupToFirebase(List<model.Transaction> transactions) async {
     final user = currentUser;
     if (user == null) return false;
 
     try {
+      // Instead of writing to Firebase Storage, we push an encrypted payload to Firestore.
       final file = await _generateBackupFile(transactions);
+      final fileContent = await file.readAsString();
 
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('backups')
-          .child(user.uid)
-          .child('expense_backup.enc'); // Overwrite previous backup
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .set({
+            'backupData': fileContent,
+            'lastBackup': FieldValue.serverTimestamp(),
+          });
 
-      await ref.putFile(file);
       return true;
     } catch (e) {
       debugPrint('Firebase Backup Error: $e');
@@ -105,7 +108,7 @@ class CloudBackupService {
     return StorageService().prefs.getString('telegram_chat_id');
   }
 
-  Future<bool> backupToTelegram(List<Transaction> transactions) async {
+  Future<bool> backupToTelegram(List<model.Transaction> transactions) async {
     final token = _telegramBotToken;
     if (token.isEmpty) return false;
 
@@ -137,7 +140,7 @@ class CloudBackupService {
 
   // ==================== Common Backup Generation ====================
 
-  Future<File> _generateBackupFile(List<Transaction> transactions) async {
+  Future<File> _generateBackupFile(List<model.Transaction> transactions) async {
     final List<List<dynamic>> rows = [
       ['Date', 'Description', 'Reference', 'Debit', 'Credit', 'Balance', 'Type', 'Category', 'Account'],
       ...transactions.map((t) => [
