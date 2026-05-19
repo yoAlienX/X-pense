@@ -60,21 +60,40 @@ class StorageService {
 
   /// Load transactions from storage
   Future<List<Transaction>> loadTransactions() async {
-    try {
-      final storedData = prefs.getString(_transactionsKey);
-      if (storedData == null || storedData.isEmpty) {
-        return [];
+    final storedData = prefs.getString(_transactionsKey);
+    if (storedData == null || storedData.isEmpty) {
+      return [];
+    }
+
+    final crypto = CryptoService();
+
+    // Check if the payload looks encrypted (base64 with an IV colon delimiter and no JSON brackets)
+    if (storedData.contains(':') && !storedData.startsWith('[')) {
+      if (!crypto.hasSecretKey) {
+        throw const FormatException('needs_decryption');
       }
 
-      final crypto = CryptoService();
-      final decryptedString = crypto.hasSecretKey && storedData.contains(':')
-          ? crypto.decryptData(storedData)
-          : storedData;
+      final decryptedString = crypto.decryptData(storedData);
 
-      final List<dynamic> jsonData = jsonDecode(decryptedString);
+      // If decryption failed and returned the original string, or garbage
+      if (decryptedString.contains(':') && !decryptedString.startsWith('[')) {
+        throw const FormatException('needs_decryption');
+      }
+
+      try {
+        final List<dynamic> jsonData = jsonDecode(decryptedString);
+        return jsonData.map((json) => Transaction.fromJson(json)).toList();
+      } catch (e) {
+        throw const FormatException('needs_decryption');
+      }
+    }
+
+    // Unencrypted Payload
+    try {
+      final List<dynamic> jsonData = jsonDecode(storedData);
       return jsonData.map((json) => Transaction.fromJson(json)).toList();
     } catch (e) {
-      print('Error loading transactions: $e');
+      print('Error parsing plain transactions: $e');
       return [];
     }
   }

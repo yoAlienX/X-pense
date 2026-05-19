@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart';
 import 'storage_service.dart';
 
@@ -9,20 +10,57 @@ class CryptoService {
 
   String? _secretKey;
 
-  // Retrieve the user's secret key from secure storage / shared prefs
-  Future<String?> getSecretKey() async {
-    if (_secretKey != null) return _secretKey;
-    _secretKey = StorageService().prefs.getString('encryption_key');
-    return _secretKey;
+  // Set the secret key into memory ONLY. DO NOT store in plaintext.
+  void setSecretKey(String key) {
+    _secretKey = key;
   }
 
-  // Set and save the user's secret key
-  Future<void> setSecretKey(String key) async {
-    _secretKey = key;
-    await StorageService().prefs.setString('encryption_key', key);
+  // Clear from memory
+  void clearSecretKey() {
+    _secretKey = null;
   }
 
   bool get hasSecretKey => _secretKey != null && _secretKey!.isNotEmpty;
+
+  // Handles 30-day expiration of the locally cached hash
+  Future<void> checkAndEnforceHashExpiration() async {
+    final prefs = StorageService().prefs;
+    final timestamp = prefs.getInt('encryption_hash_date');
+    if (timestamp != null) {
+      final savedDate = DateTime.fromMillisecondsSinceEpoch(timestamp);
+      final now = DateTime.now();
+      if (now.difference(savedDate).inDays >= 30) {
+        // Expired after 30 days. Force user to re-enter it.
+        await prefs.remove('encryption_hash');
+        await prefs.remove('encryption_hash_date');
+        clearSecretKey();
+      }
+    }
+  }
+
+  // Saves the hash locally and updates the timestamp
+  Future<void> persistHashLocally() async {
+    if (_secretKey == null || _secretKey!.isEmpty) return;
+    final hash = generateKeyHash();
+    final prefs = StorageService().prefs;
+    await prefs.setString('encryption_hash', hash);
+    await prefs.setInt('encryption_hash_date', DateTime.now().millisecondsSinceEpoch);
+  }
+
+  // Generate SHA-256 hash of the secret key for cloud verification
+  String generateKeyHash() {
+    if (_secretKey == null || _secretKey!.isEmpty) return '';
+    final bytes = utf8.encode(_secretKey!);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
+  // Generate SHA-256 hash from a specific string
+  String hashString(String input) {
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
 
   // Generate AES Encrypter from secret key
   Encrypter? _getEncrypter() {

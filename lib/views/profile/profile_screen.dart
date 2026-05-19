@@ -1,21 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../services/cloud_backup_service.dart';
 import '../widgets/liquid_glass_snackbar.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({Key? key}) : super(key: key);
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  final _backupService = CloudBackupService();
-
-  @override
   Widget build(BuildContext context) {
-    final user = _backupService.currentUser;
-    final botToken = _backupService.telegramBotToken;
+    final backupService = context.watch<CloudBackupService>();
+    final user = backupService.currentUser;
+    final botToken = backupService.telegramBotToken;
 
     return Scaffold(
       appBar: AppBar(
@@ -55,8 +50,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (user != null)
                     OutlinedButton.icon(
                       onPressed: () async {
-                        await _backupService.signOut();
-                        setState(() {});
+                        await backupService.signOut();
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             LiquidGlassSnackBar(
@@ -76,8 +70,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   else
                     ElevatedButton.icon(
                       onPressed: () async {
-                        final signedInUser = await _backupService.signInWithGoogle();
-                        setState(() {});
+                        final signedInUser = await backupService.signInWithGoogle();
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             LiquidGlassSnackBar(
@@ -125,8 +118,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (botToken.isNotEmpty)
                     OutlinedButton.icon(
                       onPressed: () async {
-                        await _backupService.setTelegramBotToken('');
-                        setState(() {});
+                        await backupService.setTelegramBotToken('');
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             LiquidGlassSnackBar(

@@ -13,6 +13,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'views/loading_screen.dart';
 import 'views/widgets/theme_switcher.dart';
 import 'views/onboarding/onboarding_screen.dart';
+import 'views/lock/decryption_screen.dart';
+import 'services/cloud_backup_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +43,7 @@ class ExpenseTrackerApp extends StatelessWidget {
           create: (_) => TransactionViewModel()..initialize(),
         ),
         ChangeNotifierProvider(create: (_) => AppLockViewModel()..initialize()),
+        ChangeNotifierProvider(create: (_) => CloudBackupService()),
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, themeVm, _) {
@@ -179,6 +182,10 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
 
     if (!_isOnboardingComplete) {
       return const OnboardingScreen();
+    }
+
+    if (vm.needsDecryptionKey) {
+      return const DecryptionScreen();
     }
 
     if (lockVm.shouldRequireLock && lockVm.isLocked) {

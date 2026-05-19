@@ -13,10 +13,14 @@ import '../models/transaction.dart' as model;
 import 'crypto_service.dart';
 import 'storage_service.dart';
 
-class CloudBackupService {
+class CloudBackupService extends ChangeNotifier {
   static final CloudBackupService _instance = CloudBackupService._internal();
   factory CloudBackupService() => _instance;
-  CloudBackupService._internal();
+  CloudBackupService._internal() {
+    FirebaseAuth.instance.authStateChanges().listen((user) {
+      notifyListeners();
+    });
+  }
 
   late final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['email'],
@@ -27,6 +31,7 @@ class CloudBackupService {
 
   Future<void> setTelegramBotToken(String token) async {
     await StorageService().prefs.setString('telegram_bot_token', token);
+    notifyListeners();
   }
 
   // ==================== Firebase & Google Auth ====================
@@ -43,6 +48,7 @@ class CloudBackupService {
       );
 
       final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      notifyListeners();
       return userCredential.user;
     } catch (e) {
       debugPrint('Google Sign-In Error: $e');
@@ -53,6 +59,7 @@ class CloudBackupService {
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await FirebaseAuth.instance.signOut();
+    notifyListeners();
   }
 
   User? get currentUser => FirebaseAuth.instance.currentUser;
@@ -66,11 +73,15 @@ class CloudBackupService {
       final file = await _generateBackupFile(transactions);
       final fileContent = await file.readAsString();
 
+      final crypto = CryptoService();
+      final keyHash = crypto.generateKeyHash();
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .set({
             'backupData': fileContent,
+            'encryptionHash': keyHash,
             'lastBackup': FieldValue.serverTimestamp(),
           });
 
@@ -98,6 +109,13 @@ class CloudBackupService {
       final data = doc.data();
       if (data == null || !data.containsKey('backupData')) {
         throw Exception('Backup data is empty or corrupted.');
+      }
+
+      // Store the hash locally so that if the user restarts the app,
+      // the lockscreen knows what key to verify against.
+      final hash = data['encryptionHash'] as String?;
+      if (hash != null && hash.isNotEmpty) {
+        await StorageService().prefs.setString('encryption_hash', hash);
       }
 
       return data['backupData'] as String;
@@ -149,11 +167,16 @@ class CloudBackupService {
 
     try {
       final file = await _generateBackupFile(transactions);
+      final crypto = CryptoService();
+      final keyHash = crypto.generateKeyHash();
+
+      // We append the hash to the caption so it can be extracted later on restore
+      final hashTag = keyHash.isNotEmpty ? '\n\nHashID: $keyHash' : '';
 
       final url = Uri.parse('https://api.telegram.org/bot$token/sendDocument');
       final request = http.MultipartRequest('POST', url)
         ..fields['chat_id'] = activeChatId
-        ..fields['caption'] = '🔐 Your X-pense Encrypted Backup\n📅 ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}'
+        ..fields['caption'] = '🔐 Your X-pense Encrypted Backup\n📅 ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}$hashTag'
         ..files.add(await http.MultipartFile.fromPath('document', file.path));
 
       final response = await request.send();
@@ -183,6 +206,12 @@ class CloudBackupService {
     }
 
     try {
+      // Because we cannot fetch the caption via getFile, we must fetch the chat history if we strictly wanted the hash.
+      // But for simplicity of 1-click restore, the File payload itself contains the base64 structure.
+      // If decryption fails, CsvService catches it.
+      // If we *really* wanted to set the hash locally like Google:
+      // Since telegram doesn't give us the caption via getFile, we rely strictly on the decryption phase catching bad keys.
+
       // Step 1: Get the file path from Telegram
       final getFileUrl = Uri.parse('https://api.telegram.org/bot$token/getFile?file_id=$fileId');
       final pathResponse = await http.get(getFileUrl);

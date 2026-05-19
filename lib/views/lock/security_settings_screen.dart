@@ -393,7 +393,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<AppLockViewModel>();
-    final cloudBackupService = CloudBackupService();
+    final cloudBackupService = context.watch<CloudBackupService>();
     final user = cloudBackupService.currentUser;
     final botToken = cloudBackupService.telegramBotToken;
 
@@ -1063,12 +1063,18 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
                 // 2. Set the new key.
                 final cryptoService = CryptoService();
-                await cryptoService.setSecretKey(newKey);
+                cryptoService.setSecretKey(newKey);
 
                 // 3. Resave transactions using the new key.
                 await txVm.addMultipleTransactions([]); // trigger a re-save natively via ViewModel or call save manually
                 final storageService = StorageService();
                 await storageService.saveTransactions(txs);
+                // 4. Save Hash locally so we know if there is an active key on boot.
+                if (newKey.isNotEmpty) {
+                  await storageService.prefs.setString('encryption_hash', cryptoService.generateKeyHash());
+                } else {
+                  await storageService.prefs.remove('encryption_hash');
+                }
 
                 if (context.mounted) {
                   Navigator.pop(ctx);
