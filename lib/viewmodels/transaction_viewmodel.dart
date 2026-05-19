@@ -6,6 +6,7 @@ import '../models/transaction.dart';
 import '../models/filter_state.dart';
 import '../services/storage_service.dart';
 import '../services/csv_service.dart';
+import '../services/crypto_service.dart';
 
 class TransactionViewModel extends ChangeNotifier {
   final StorageService _storage = StorageService();
@@ -70,13 +71,21 @@ class TransactionViewModel extends ChangeNotifier {
   /// Net flow (income - expenses) for filtered transactions
   double get netFlow => totalIncome - totalExpense;
 
+  bool _needsDecryptionKey = false;
+  bool get needsDecryptionKey => _needsDecryptionKey;
+
   // ==================== Initialization ====================
 
   Future<void> initialize() async {
     _isLoading = true;
+    _needsDecryptionKey = false;
     notifyListeners();
 
     try {
+      // Check if hash has expired (older than 30 days) and remove if necessary.
+      final crypto = CryptoService();
+      await crypto.checkAndEnforceHashExpiration();
+
       // Load transactions from storage
       _allTransactions = await _storage.loadTransactions();
 
@@ -118,6 +127,12 @@ class TransactionViewModel extends ChangeNotifier {
       // Apply initial filters
       _applyFilters();
       _displayLimit = 20; // reset pagination limit
+    } on FormatException catch (e) {
+      if (e.message == 'needs_decryption') {
+        _needsDecryptionKey = true;
+      } else {
+        print('Error parsing data: $e');
+      }
     } catch (e) {
       print('Error initializing: $e');
     } finally {

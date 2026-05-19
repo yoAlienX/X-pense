@@ -92,7 +92,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final cryptoKey = _cryptoKeyController.text.trim();
     if (cryptoKey.isNotEmpty) {
       final cryptoService = CryptoService();
-      await cryptoService.setSecretKey(cryptoKey);
+      cryptoService.setSecretKey(cryptoKey);
+      await StorageService().prefs.setString('encryption_hash', cryptoService.generateKeyHash());
     }
 
     // 4. Save flag
