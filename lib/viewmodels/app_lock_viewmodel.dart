@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -45,6 +48,16 @@ class AppLockViewModel extends ChangeNotifier {
   String get questionOne => _questionOne;
   String get questionTwo => _questionTwo;
 
+  String _hashString(String input) {
+    final bytes = utf8.encode(input);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
+  bool _isSha256Hash(String s) {
+    return s.length == 64 && RegExp(r'^[a-fA-F0-9]+$').hasMatch(s);
+  }
+
   Future<void> _evaluateBiometricAvailability() async {
     try {
       final isSupported = await _localAuth.isDeviceSupported();
@@ -85,6 +98,26 @@ class AppLockViewModel extends ChangeNotifier {
     _answerOne = questions['a1'] ?? '';
     _questionTwo = questions['q2'] ?? '';
     _answerTwo = questions['a2'] ?? '';
+
+    // Migrate plaintext answers to hashed versions
+    bool needsMigration = false;
+    if (_answerOne.isNotEmpty && !_isSha256Hash(_answerOne)) {
+      _answerOne = _hashString(_answerOne);
+      needsMigration = true;
+    }
+    if (_answerTwo.isNotEmpty && !_isSha256Hash(_answerTwo)) {
+      _answerTwo = _hashString(_answerTwo);
+      needsMigration = true;
+    }
+
+    if (needsMigration) {
+      await _storage.saveSecurityQuestions({
+        'q1': _questionOne,
+        'a1': _answerOne,
+        'q2': _questionTwo,
+        'a2': _answerTwo,
+      });
+    }
 
     await _evaluateBiometricAvailability();
 
@@ -130,9 +163,9 @@ class AppLockViewModel extends ChangeNotifier {
   }) async {
     _passcode = passcode;
     _questionOne = questionOne.trim();
-    _answerOne = answerOne.trim().toLowerCase();
+    _answerOne = _hashString(answerOne.trim().toLowerCase());
     _questionTwo = questionTwo.trim();
-    _answerTwo = answerTwo.trim().toLowerCase();
+    _answerTwo = _hashString(answerTwo.trim().toLowerCase());
 
     _passcodeEnabled = true;
     _isLocked = false;
@@ -299,8 +332,8 @@ class AppLockViewModel extends ChangeNotifier {
     required String answerOne,
     required String answerTwo,
   }) {
-    final one = answerOne.trim().toLowerCase();
-    final two = answerTwo.trim().toLowerCase();
+    final one = _hashString(answerOne.trim().toLowerCase());
+    final two = _hashString(answerTwo.trim().toLowerCase());
     return one == _answerOne && two == _answerTwo;
   }
 
