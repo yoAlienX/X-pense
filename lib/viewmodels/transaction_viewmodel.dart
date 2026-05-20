@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 // viewmodels/transaction_viewmodel.dart
 import 'package:flutter/material.dart';
 
@@ -97,7 +98,7 @@ class TransactionViewModel extends ChangeNotifier {
       // Apply initial filters
       _applyFilters();
     } catch (e) {
-      print('Error initializing: $e');
+      debugPrint('Error initializing: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
