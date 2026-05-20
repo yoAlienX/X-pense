@@ -24,7 +24,7 @@ class _DecryptionScreenState extends State<DecryptionScreen> {
     setState(() => _isVerifying = true);
 
     final cryptoService = CryptoService();
-    cryptoService.setSecretKey(key);
+    await cryptoService.setSecretKey(key);
 
     // Verify hash if available
     final storedHash = StorageService().prefs.getString('encryption_hash');
