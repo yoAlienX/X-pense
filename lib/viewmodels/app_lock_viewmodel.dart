@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -130,9 +132,9 @@ class AppLockViewModel extends ChangeNotifier {
   }) async {
     _passcode = passcode;
     _questionOne = questionOne.trim();
-    _answerOne = answerOne.trim().toLowerCase();
+    _answerOne = sha256.convert(utf8.encode(answerOne.trim().toLowerCase())).toString();
     _questionTwo = questionTwo.trim();
-    _answerTwo = answerTwo.trim().toLowerCase();
+    _answerTwo = sha256.convert(utf8.encode(answerTwo.trim().toLowerCase())).toString();
 
     _passcodeEnabled = true;
     _isLocked = false;
@@ -301,7 +303,16 @@ class AppLockViewModel extends ChangeNotifier {
   }) {
     final one = answerOne.trim().toLowerCase();
     final two = answerTwo.trim().toLowerCase();
-    return one == _answerOne && two == _answerTwo;
+
+    bool verify(String input, String stored) {
+      if (stored.length == 64) {
+        final hashed = sha256.convert(utf8.encode(input)).toString();
+        return hashed == stored;
+      }
+      return input == stored;
+    }
+
+    return verify(one, _answerOne) && verify(two, _answerTwo);
   }
 
   Future<bool> resetPasscodeWithSecurityAnswers({
