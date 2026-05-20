@@ -1,0 +1,113 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:x_pense/models/filter_state.dart';
+
+void main() {
+  group('SelectionState', () {
+    test('initial state should be empty and not in selection mode', () {
+      const state = SelectionState();
+
+      expect(state.selectionMode, isFalse);
+      expect(state.selectedIds, isEmpty);
+      expect(state.selectedCount, equals(0));
+      expect(state.isSelected('any_id'), isFalse);
+    });
+
+    group('toggleSelection', () {
+      test('should add id when not present', () {
+        const state = SelectionState();
+        final newState = state.toggleSelection('id_1');
+
+        expect(newState.selectedIds.contains('id_1'), isTrue);
+        expect(newState.isSelected('id_1'), isTrue);
+        expect(newState.selectedCount, equals(1));
+        expect(newState.selectionMode, isTrue); // Should enter selection mode
+      });
+
+      test('should remove id when already present', () {
+        const state = SelectionState(
+          selectionMode: true,
+          selectedIds: {'id_1'},
+        );
+        final newState = state.toggleSelection('id_1');
+
+        expect(newState.selectedIds.contains('id_1'), isFalse);
+        expect(newState.isSelected('id_1'), isFalse);
+        expect(newState.selectedCount, equals(0));
+        expect(newState.selectionMode, isFalse); // Should exit selection mode when empty
+      });
+
+      test('should maintain selection mode if other ids remain', () {
+        const state = SelectionState(
+          selectionMode: true,
+          selectedIds: {'id_1', 'id_2'},
+        );
+        final newState = state.toggleSelection('id_1');
+
+        expect(newState.selectedIds.contains('id_1'), isFalse);
+        expect(newState.selectedIds.contains('id_2'), isTrue);
+        expect(newState.selectedCount, equals(1));
+        expect(newState.selectionMode, isTrue); // Selection mode remains true
+      });
+
+      test('multiple toggles should work correctly', () {
+        var state = const SelectionState();
+
+        // Add first
+        state = state.toggleSelection('1');
+        expect(state.selectedIds, equals({'1'}));
+        expect(state.selectionMode, isTrue);
+
+        // Add second
+        state = state.toggleSelection('2');
+        expect(state.selectedIds, equals({'1', '2'}));
+        expect(state.selectionMode, isTrue);
+
+        // Remove first
+        state = state.toggleSelection('1');
+        expect(state.selectedIds, equals({'2'}));
+        expect(state.selectionMode, isTrue);
+
+        // Remove second
+        state = state.toggleSelection('2');
+        expect(state.selectedIds, isEmpty);
+        expect(state.selectionMode, isFalse);
+      });
+    });
+
+    test('clearSelection should return empty state', () {
+      const state = SelectionState(
+        selectionMode: true,
+        selectedIds: {'id_1', 'id_2'},
+      );
+
+      final newState = state.clearSelection();
+
+      expect(newState.selectionMode, isFalse);
+      expect(newState.selectedIds, isEmpty);
+      expect(newState.selectedCount, equals(0));
+    });
+
+    test('selectAll should add all ids and enter selection mode', () {
+      const state = SelectionState();
+      final allIds = ['id_1', 'id_2', 'id_3'];
+
+      final newState = state.selectAll(allIds);
+
+      expect(newState.selectionMode, isTrue);
+      expect(newState.selectedIds, equals({'id_1', 'id_2', 'id_3'}));
+      expect(newState.selectedCount, equals(3));
+    });
+
+    test('copyWith should only update specified fields', () {
+      const state = SelectionState();
+
+      final newState = state.copyWith(selectionMode: true);
+      expect(newState.selectionMode, isTrue);
+      expect(newState.selectedIds, isEmpty); // Unchanged
+
+      final newState2 = state.copyWith(selectedIds: {'id_1'});
+      expect(newState2.selectionMode, isFalse); // Unchanged
+      expect(newState2.selectedIds, equals({'id_1'}));
+    });
+  });
+}
