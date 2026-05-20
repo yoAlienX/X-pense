@@ -412,32 +412,55 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
             child: Column(
               children: [
                 Stack(
-                  alignment: Alignment.bottomRight,
                   children: [
-                    CircleAvatar(
-                      radius: 45,
-                      backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                      backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
-                      child: user == null
-                          ? Text(
-                              botToken.isNotEmpty ? 'T' : '?',
-                              style: TextStyle(
-                                fontSize: 36,
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.bold,
+                    SizedBox(
+                      width: 100,
+                      height: 90,
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: 0,
+                            child: CircleAvatar(
+                              radius: 45,
+                              backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                              backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
+                              child: user == null
+                                  ? Icon(Icons.person, size: 45, color: Theme.of(context).colorScheme.primary)
+                                  : null,
+                            ),
+                          ),
+                          if (botToken.isNotEmpty)
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 3),
+                                ),
+                                child: const CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: Colors.blue,
+                                  child: Icon(Icons.telegram, size: 24, color: Colors.white),
+                                ),
                               ),
-                            )
-                          : null,
-                    ),
-                    if (user != null || botToken.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: Colors.green,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.cloud_done, size: 16, color: Colors.white),
+                            ),
+                          if (user != null && botToken.isEmpty)
+                            Positioned(
+                              right: 10,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.cloud_done, size: 16, color: Colors.white),
+                              ),
+                            ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1063,7 +1086,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
                 // 2. Set the new key.
                 final cryptoService = CryptoService();
-                cryptoService.setSecretKey(newKey);
+                await cryptoService.setSecretKey(newKey);
 
                 // 3. Resave transactions using the new key.
                 await txVm.addMultipleTransactions([]); // trigger a re-save natively via ViewModel or call save manually
@@ -1118,54 +1141,66 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   }
 
   void _showArchiveDialog(BuildContext context) {
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Archive Old Transactions'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'This will export transactions older than the selected period and replace them with a single Carry-Forward balance transaction.',
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      pageBuilder: (ctx, anim1, anim2) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).colorScheme.surface.withAlpha(AppConstants.glassPanelAlpha),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withAlpha(AppConstants.glassBorderAlpha),
+                    width: 0.8,
+                  ),
+                ),
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppConstants.primaryPurple.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.archive_outlined, size: 24, color: AppConstants.primaryPurple),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Archive Old Transactions',
+                            style: Theme.of(ctx).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'This will export transactions older than the selected period and replace them with a single Carry-Forward balance transaction.',
+                      style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 24),
+                    _ArchiveOptionTile(title: 'Older than 3 months', onTap: () { Navigator.pop(ctx); _performArchive(context, 3); }),
+                    _ArchiveOptionTile(title: 'Older than 6 months', onTap: () { Navigator.pop(ctx); _performArchive(context, 6); }),
+                    _ArchiveOptionTile(title: 'Older than 1 year', onTap: () { Navigator.pop(ctx); _performArchive(context, 12); }),
+                    _ArchiveOptionTile(title: 'Older than 2 years', onTap: () { Navigator.pop(ctx); _performArchive(context, 24); }),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
-              ListTile(
-                title: const Text('Older than 3 months'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _performArchive(context, 3);
-                },
-              ),
-              ListTile(
-                title: const Text('Older than 6 months'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _performArchive(context, 6);
-                },
-              ),
-              ListTile(
-                title: const Text('Older than 1 year'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _performArchive(context, 12);
-                },
-              ),
-              ListTile(
-                title: const Text('Older than 2 years'),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _performArchive(context, 24);
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
             ),
-          ],
+          ),
         );
       },
     );
@@ -1748,6 +1783,29 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
           },
         );
       },
+    );
+  }
+}
+
+class _ArchiveOptionTile extends StatelessWidget {
+  final String title;
+  final VoidCallback onTap;
+
+  const _ArchiveOptionTile({Key? key, required this.title, required this.onTap}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+      ),
     );
   }
 }

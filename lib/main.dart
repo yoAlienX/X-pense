@@ -15,6 +15,7 @@ import 'views/widgets/theme_switcher.dart';
 import 'views/onboarding/onboarding_screen.dart';
 import 'views/lock/decryption_screen.dart';
 import 'services/cloud_backup_service.dart';
+import 'services/crypto_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +27,7 @@ Future<void> main() async {
   }
 
   await StorageService().init();
+  await CryptoService().loadKeyFromSecureStorage();
   runApp(const ExpenseTrackerApp());
 }
 
@@ -184,12 +186,12 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
       return const OnboardingScreen();
     }
 
-    if (vm.needsDecryptionKey) {
-      return const DecryptionScreen();
-    }
-
     if (lockVm.shouldRequireLock && lockVm.isLocked) {
       return const LockScreen();
+    }
+
+    if (vm.needsDecryptionKey) {
+      return const DecryptionScreen();
     }
 
     return AnimatedSwitcher(
