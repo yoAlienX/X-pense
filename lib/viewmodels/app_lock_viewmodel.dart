@@ -1,9 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter/foundation.dart';
 
 import '../services/storage_service.dart';
-import '../services/crypto_service.dart';
 
 class AppLockViewModel extends ChangeNotifier {
   AppLockViewModel({StorageService? storage})
@@ -50,6 +49,10 @@ class AppLockViewModel extends ChangeNotifier {
     try {
       final isSupported = await _localAuth.isDeviceSupported();
       final canCheck = await _localAuth.canCheckBiometrics;
+
+      // Some OEM builds may report an empty enrolled-biometrics list even when
+      // hardware + biometric auth are available. Use capability checks here and
+      // let authenticate() surface enrollment errors when toggled.
       _biometricAvailable = isSupported && canCheck;
       _lastBiometricError = '';
     } catch (e) {
@@ -58,6 +61,10 @@ class AppLockViewModel extends ChangeNotifier {
     }
   }
 
+  // Note: For unlocking inline views via passcode, a robust implementation would
+  // present a bottom sheet or a dialog for passcode entry. Here we simulate that
+  // the app requests an authentication flow from the caller.
+  // Biometrics are used first if enabled.
   Future<bool> authenticate(Future<bool> Function() onFallbackToPasscode) async {
     if (!passcodeEnabled) return true;
 
@@ -70,10 +77,7 @@ class AppLockViewModel extends ChangeNotifier {
             stickyAuth: true,
           ),
         );
-        if (success) {
-            await CryptoService().loadKeyFromSecureStorage();
-            return true;
-        }
+        if (success) return true;
       } catch (e) {
         debugPrint('Authentication error: $e');
       }
@@ -109,6 +113,7 @@ class AppLockViewModel extends ChangeNotifier {
 
     await _evaluateBiometricAvailability();
 
+    // Biometrics is allowed only when passcode is enabled.
     if (!_passcodeEnabled && _biometricEnabled) {
       _biometricEnabled = false;
       await _storage.saveBiometricUnlockEnabled(false);
@@ -118,9 +123,8 @@ class AppLockViewModel extends ChangeNotifier {
       _isLocked = false;
       _biometricEnabled = false;
       await _storage.saveBiometricUnlockEnabled(false);
-      // No app lock -> eagerly attempt to load AES key
-      await CryptoService().loadKeyFromSecureStorage();
     } else {
+      // Always start in a locked state when passcode lock is enabled.
       _isLocked = true;
       if (_passcode.isEmpty) {
         _passcodeEnabled = false;
@@ -128,7 +132,6 @@ class AppLockViewModel extends ChangeNotifier {
         _isLocked = false;
         await _storage.savePasscodeEnabled(false);
         await _storage.saveBiometricUnlockEnabled(false);
-        await CryptoService().loadKeyFromSecureStorage();
       }
     }
 
@@ -197,17 +200,15 @@ class AppLockViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> unlockWithPasscode(String value) async {
+  bool unlockWithPasscode(String value) {
     if (!_passcodeEnabled) {
       _isLocked = false;
       notifyListeners();
-      await CryptoService().loadKeyFromSecureStorage();
       return true;
     }
 
     if (value == _passcode) {
       _isLocked = false;
-      await CryptoService().loadKeyFromSecureStorage();
       notifyListeners();
       return true;
     }
@@ -233,7 +234,6 @@ class AppLockViewModel extends ChangeNotifier {
 
       if (ok) {
         _isLocked = false;
-        await CryptoService().loadKeyFromSecureStorage();
         notifyListeners();
       }
 

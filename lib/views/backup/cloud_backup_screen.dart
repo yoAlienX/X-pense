@@ -49,17 +49,10 @@ class CloudBackupScreen extends StatelessWidget {
             color: Colors.blue,
             children: [
               ListTile(
-                leading: const Icon(Icons.link),
-                title: const Text('Link Telegram Bot'),
-                subtitle: const Text('Verify or change your Telegram bot token.'),
-                onTap: () => showTelegramSetupDialog(context),
-              ),
-              const Divider(height: 1),
-              ListTile(
                 leading: const Icon(Icons.send_outlined),
                 title: const Text('Backup to Telegram'),
                 subtitle: const Text('Send an encrypted backup file to your bot.'),
-                onTap: () => handleTelegramBackup(context),
+                onTap: () => showTelegramSetupDialog(context),
               ),
               const Divider(height: 1),
               ListTile(

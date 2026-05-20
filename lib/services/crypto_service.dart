@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'storage_service.dart';
 
 class CryptoService {
@@ -10,29 +9,15 @@ class CryptoService {
   CryptoService._internal();
 
   String? _secretKey;
-  final _secureStorage = const FlutterSecureStorage();
 
-  // Set the secret key into memory.
-  // We also save it to secure storage so it can be auto-loaded later.
-  Future<void> setSecretKey(String key) async {
+  // Set the secret key into memory ONLY. DO NOT store in plaintext.
+  void setSecretKey(String key) {
     _secretKey = key;
-    await _secureStorage.write(key: 'aes_secret_key', value: key);
   }
 
-  // Try loading from secure storage
-  Future<bool> loadKeyFromSecureStorage() async {
-    final key = await _secureStorage.read(key: 'aes_secret_key');
-    if (key != null && key.isNotEmpty) {
-      _secretKey = key;
-      return true;
-    }
-    return false;
-  }
-
-  // Clear from memory and secure storage
-  Future<void> clearSecretKey() async {
+  // Clear from memory
+  void clearSecretKey() {
     _secretKey = null;
-    await _secureStorage.delete(key: 'aes_secret_key');
   }
 
   bool get hasSecretKey => _secretKey != null && _secretKey!.isNotEmpty;
@@ -48,7 +33,7 @@ class CryptoService {
         // Expired after 30 days. Force user to re-enter it.
         await prefs.remove('encryption_hash');
         await prefs.remove('encryption_hash_date');
-        await clearSecretKey();
+        clearSecretKey();
       }
     }
   }

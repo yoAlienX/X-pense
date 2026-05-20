@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import '../../viewmodels/transaction_viewmodel.dart';
 import 'package:provider/provider.dart';
 
 import '../../utils/constants.dart';
@@ -135,7 +134,6 @@ class _LockScreenState extends State<LockScreen> {
                                       _error = null;
                                     });
                                     final ok = await vm.unlockWithBiometric();
-                                    if (ok && mounted) { context.read<TransactionViewModel>().initialize(); }
                                     if (!ok && mounted) {
                                       setState(
                                         () => _error =
@@ -205,8 +203,8 @@ class _LockScreenState extends State<LockScreen> {
     );
   }
 
-  Future<void> _unlock(AppLockViewModel vm) async {
-    final ok = await vm.unlockWithPasscode(_passcodeController.text.trim());
+  void _unlock(AppLockViewModel vm) {
+    final ok = vm.unlockWithPasscode(_passcodeController.text.trim());
     if (!ok) {
       setState(() => _error = 'Incorrect passcode');
       return;
@@ -214,7 +212,6 @@ class _LockScreenState extends State<LockScreen> {
 
     setState(() => _error = null);
     _passcodeController.clear();
-    context.read<TransactionViewModel>().initialize();
   }
 
   Future<void> _showResetDialog(

@@ -29,7 +29,7 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (existingToken.isNotEmpty) ...[
-                    const Text('✓ A bot is already linked to your account. You can re-verify or change the token below.',
+                    const Text('✓ A bot is already linked to your account. You can backup immediately or change the token below.',
                         style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 15),
                   ],
@@ -37,7 +37,7 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
                     '1. Create a bot using @BotFather on Telegram.\n'
                     '2. Paste the Bot Token below.\n'
                     '3. Open your bot on Telegram and send a "hello" message to it.\n'
-                    '4. Tap "Verify".',
+                    '4. Tap "Backup".',
                   ),
                   const SizedBox(height: 20),
                   TextFormField(
@@ -81,20 +81,45 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
                     return;
                   }
 
+                  final crypto = CryptoService();
+                  if (!crypto.hasSecretKey) {
+                    final proceed = await showDialog<bool>(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('Unencrypted Backup Warning'),
+                        content: const Text(
+                          'You have not set up a Secret Encryption Key. '
+                          'Proceeding will upload your transactions to Telegram in PLAIN TEXT.\n\n'
+                          'Do you want to proceed without encryption?'
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(c, true),
+                            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                            child: const Text('Proceed Anyway'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (proceed != true) return;
+                  }
+
                   setState(() => isVerifying = true);
                   await backupService.setTelegramBotToken(tokenInput.trim());
 
                   final chatId = await backupService.fetchTelegramChatId();
 
                   if (chatId != null && chatId.isNotEmpty) {
+                    final success = await backupService.backupToTelegram(txVm.allTransactions);
                     if (context.mounted) {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).clearSnackBars();
                       ScaffoldMessenger.of(context).showSnackBar(
                         LiquidGlassSnackBar(
                           context: context,
-                          message: 'Telegram Bot verified successfully!',
-                          type: SnackBarType.success,
+                          message: success ? 'Backup sent to Telegram!' : 'Failed to send backup.',
+                          type: success ? SnackBarType.success : SnackBarType.error,
                         ),
                       );
                     }
@@ -114,7 +139,7 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
                 },
                 child: isVerifying
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Verify'),
+                    : Text(existingToken.isNotEmpty && tokenInput == existingToken ? 'Backup Now' : 'Verify & Backup'),
               ),
             ],
           );
@@ -414,82 +439,5 @@ Future<void> handleGoogleRestore(BuildContext context) async {
         ),
       );
     }
-  }
-}
-
-Future<void> handleTelegramBackup(BuildContext context) async {
-  final txVm = context.read<TransactionViewModel>();
-  final backupService = CloudBackupService();
-  final crypto = CryptoService();
-
-  if (backupService.telegramBotToken.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      LiquidGlassSnackBar(
-        context: context,
-        message: 'Please link a Telegram bot first.',
-        type: SnackBarType.warning,
-      ),
-    );
-    return;
-  }
-
-  // Security Warning if not encrypted
-  if (!crypto.hasSecretKey) {
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Unencrypted Backup Warning'),
-          content: const Text(
-            'You have not set up a Secret Encryption Key in the Security Settings. '
-            'Proceeding will upload your transactions in PLAIN TEXT to Telegram.\n\n'
-            'Do you want to proceed without encryption?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-              child: const Text('Proceed Anyway'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (proceed != true) return;
-  }
-
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (ctx) {
-      return AlertDialog(
-        content: Row(
-          children: const [
-            CircularProgressIndicator(),
-            SizedBox(width: 20),
-            Text("Uploading to Telegram..."),
-          ],
-        ),
-      );
-    },
-  );
-
-  final success = await backupService.backupToTelegram(txVm.allTransactions);
-
-  if (context.mounted) {
-    Navigator.of(context).pop(); // Close dialog
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      LiquidGlassSnackBar(
-        context: context,
-        message: success ? 'Successfully backed up to Telegram!' : 'Failed to upload backup.',
-        type: success ? SnackBarType.success : SnackBarType.error,
-      ),
-    );
   }
 }

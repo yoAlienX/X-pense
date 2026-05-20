@@ -59,8 +59,8 @@ Future<bool> showLockOverlayDialog(BuildContext context) async {
                           labelText: 'Passcode',
                           errorText: error,
                         ),
-                        onSubmitted: (value) async {
-                          if (await vm.unlockWithPasscode(value.trim())) {
+                        onSubmitted: (value) {
+                          if (vm.unlockWithPasscode(value.trim())) {
                             Navigator.pop(ctx, true);
                           } else {
                             setState(() => error = 'Incorrect passcode');
@@ -77,8 +77,8 @@ Future<bool> showLockOverlayDialog(BuildContext context) async {
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
-                            onPressed: () async {
-                              if (await vm.unlockWithPasscode(passcodeController.text.trim())) {
+                            onPressed: () {
+                              if (vm.unlockWithPasscode(passcodeController.text.trim())) {
                                 Navigator.pop(ctx, true);
                               } else {
                                 setState(() => error = 'Incorrect passcode');

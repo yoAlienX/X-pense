@@ -35,7 +35,6 @@ dependencies:
   url_launcher: ^6.3.2
   cloud_firestore: ^6.3.0
   crypto: ^3.0.7
-  flutter_secure_storage: ^10.2.0
 
 dev_dependencies:
   flutter_test:
