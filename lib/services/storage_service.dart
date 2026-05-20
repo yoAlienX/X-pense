@@ -1,5 +1,6 @@
 // services/storage_service.dart
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
 
@@ -43,7 +44,7 @@ class StorageService {
       final jsonString = jsonEncode(jsonData);
       return await prefs.setString(_transactionsKey, jsonString);
     } catch (e) {
-      print('Error saving transactions: $e');
+      debugPrint('Error saving transactions: $e');
       return false;
     }
   }
@@ -59,7 +60,7 @@ class StorageService {
       final List<dynamic> jsonData = jsonDecode(jsonString);
       return jsonData.map((json) => Transaction.fromJson(json)).toList();
     } catch (e) {
-      print('Error loading transactions: $e');
+      debugPrint('Error loading transactions: $e');
       return [];
     }
   }
@@ -69,7 +70,7 @@ class StorageService {
     try {
       return await prefs.remove(_transactionsKey);
     } catch (e) {
-      print('Error clearing transactions: $e');
+      debugPrint('Error clearing transactions: $e');
       return false;
     }
   }
@@ -127,7 +128,7 @@ class StorageService {
     try {
       return await prefs.clear();
     } catch (e) {
-      print('Error clearing all data: $e');
+      debugPrint('Error clearing all data: $e');
       return false;
     }
   }
@@ -194,7 +195,7 @@ class StorageService {
       final jsonData = jsonDecode(jsonString) as Map<String, dynamic>;
       return jsonData.map((key, value) => MapEntry(key, value.toString()));
     } catch (e) {
-      print('Error loading security questions: $e');
+      debugPrint('Error loading security questions: $e');
       return {'q1': '', 'a1': '', 'q2': '', 'a2': ''};
     }
   }
@@ -205,7 +206,7 @@ class StorageService {
       final jsonString = jsonEncode(questions);
       return await prefs.setString(_securityQuestionsKey, jsonString);
     } catch (e) {
-      print('Error saving security questions: $e');
+      debugPrint('Error saving security questions: $e');
       return false;
     }
   }
