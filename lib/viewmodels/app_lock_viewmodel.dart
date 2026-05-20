@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
@@ -182,7 +184,7 @@ class AppLockViewModel extends ChangeNotifier {
       return true;
     }
 
-    if (value == _passcode) {
+    if (sha256.convert(utf8.encode(value)).toString() == sha256.convert(utf8.encode(_passcode)).toString()) {
       _isLocked = false;
       notifyListeners();
       return true;
