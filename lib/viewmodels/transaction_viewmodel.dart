@@ -24,6 +24,7 @@ class TransactionViewModel extends ChangeNotifier {
   double _currentBalance = 0.0;
   List<String> _categories = List<String>.from(AppConstants.categories);
   String _defaultCategory = 'Uncategorized';
+  List<String>? _availableYearsCache;
 
   // Getters
   List<Transaction> get allTransactions => List.unmodifiable(_allTransactions);
@@ -57,6 +58,11 @@ class TransactionViewModel extends ChangeNotifier {
   double get netFlow => totalIncome - totalExpense;
 
   // ==================== Initialization ====================
+
+  // Invalidate cache when transactions change
+  void _invalidateCaches() {
+    _availableYearsCache = null;
+  }
 
   Future<void> initialize() async {
     _isLoading = true;
@@ -151,6 +157,7 @@ class TransactionViewModel extends ChangeNotifier {
   /// Add a new transaction
   Future<void> addTransaction(Transaction transaction) async {
     _allTransactions.add(transaction);
+    _invalidateCaches();
 
     // Recalculate balances for all transactions
     await _recalculateAllBalances();
@@ -168,6 +175,7 @@ class TransactionViewModel extends ChangeNotifier {
   /// Add multiple transactions at once
   Future<void> addMultipleTransactions(List<Transaction> transactions) async {
     _allTransactions.addAll(transactions);
+    _invalidateCaches();
 
     // Recalculate balances for all transactions
     await _recalculateAllBalances();
@@ -190,6 +198,7 @@ class TransactionViewModel extends ChangeNotifier {
     final index = _allTransactions.indexWhere((t) => t.id == id);
     if (index != -1) {
       _allTransactions[index] = updatedTransaction;
+      _invalidateCaches();
 
       // Recalculate balances
       await _recalculateAllBalances();
@@ -206,6 +215,7 @@ class TransactionViewModel extends ChangeNotifier {
   /// Delete a transaction
   Future<void> deleteTransaction(String id) async {
     _allTransactions.removeWhere((t) => t.id == id);
+    _invalidateCaches();
 
     // Recalculate balances for remaining transactions
     await _recalculateAllBalances();
@@ -218,6 +228,7 @@ class TransactionViewModel extends ChangeNotifier {
   /// Delete multiple transactions
   Future<void> deleteMultipleTransactions(Set<String> ids) async {
     _allTransactions.removeWhere((t) => ids.contains(t.id));
+    _invalidateCaches();
 
     // Recalculate balances
     await _recalculateAllBalances();
@@ -235,6 +246,7 @@ class TransactionViewModel extends ChangeNotifier {
     final index = _allTransactions.indexWhere((t) => t.id == id);
     if (index != -1) {
       _allTransactions[index].category = category;
+      _invalidateCaches();
       await _storage.saveTransactions(_allTransactions);
       _applyFilters();
       notifyListeners();
@@ -245,6 +257,7 @@ class TransactionViewModel extends ChangeNotifier {
   Future<void> clearAllTransactions() async {
     _allTransactions.clear();
     _filteredTransactions.clear();
+    _invalidateCaches();
     _currentBalance = 0.0;
     await _storage.clearTransactions();
     notifyListeners();
@@ -277,6 +290,7 @@ class TransactionViewModel extends ChangeNotifier {
         txn.category = _defaultCategory;
       }
     }
+    _invalidateCaches();
 
     await _storage.saveCategories(_categories);
     await _storage.saveTransactions(_allTransactions);
@@ -461,10 +475,13 @@ class TransactionViewModel extends ChangeNotifier {
 
   // Get available years for filtering
   List<String> getAvailableYears() {
-    final years = _allTransactions.map((t) => t.year.toString()).toSet();
-    years.add(DateTime.now().year.toString());
+    if (_availableYearsCache == null) {
+      final years = _allTransactions.map((t) => t.year.toString()).toSet();
+      years.add(DateTime.now().year.toString());
 
-    final sortedYears = years.toList()..sort((a, b) => b.compareTo(a));
-    return ['All', ...sortedYears];
+      final sortedYears = years.toList()..sort((a, b) => b.compareTo(a));
+      _availableYearsCache = ['All', ...sortedYears];
+    }
+    return _availableYearsCache!;
   }
 }
