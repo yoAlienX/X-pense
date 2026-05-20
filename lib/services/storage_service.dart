@@ -1,5 +1,6 @@
 // services/storage_service.dart
 import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
 
@@ -169,14 +170,28 @@ class StorageService {
     return await prefs.setBool(_faceAuthEnabledKey, enabled);
   }
 
+  /// Hash passcode securely using SHA-256
+  String hashPasscode(String passcode) {
+    final bytes = utf8.encode(passcode);
+    return sha256.convert(bytes).toString();
+  }
+
   /// Get passcode
   String? getPasscode() {
-    return prefs.getString(_passcodeKey);
+    final stored = prefs.getString(_passcodeKey);
+    // Migrate plaintext passcodes to hashed format
+    if (stored != null && stored.isNotEmpty && stored.length != 64) {
+      final hashed = hashPasscode(stored);
+      prefs.setString(_passcodeKey, hashed);
+      return hashed;
+    }
+    return stored;
   }
 
   /// Save passcode
   Future<bool> savePasscode(String passcode) async {
-    return await prefs.setString(_passcodeKey, passcode);
+    final hashed = passcode.length == 64 ? passcode : hashPasscode(passcode);
+    return await prefs.setString(_passcodeKey, hashed);
   }
 
   /// Remove stored passcode

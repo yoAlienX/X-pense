@@ -128,7 +128,7 @@ class AppLockViewModel extends ChangeNotifier {
     required String questionTwo,
     required String answerTwo,
   }) async {
-    _passcode = passcode;
+    _passcode = _storage.hashPasscode(passcode);
     _questionOne = questionOne.trim();
     _answerOne = answerOne.trim().toLowerCase();
     _questionTwo = questionTwo.trim();
@@ -182,7 +182,7 @@ class AppLockViewModel extends ChangeNotifier {
       return true;
     }
 
-    if (value == _passcode) {
+    if (_storage.hashPasscode(value) == _passcode) {
       _isLocked = false;
       notifyListeners();
       return true;
@@ -317,7 +317,7 @@ class AppLockViewModel extends ChangeNotifier {
       return false;
     }
 
-    _passcode = newPasscode;
+    _passcode = _storage.hashPasscode(newPasscode);
     await _storage.savePasscode(newPasscode);
     _isLocked = false;
     notifyListeners();
