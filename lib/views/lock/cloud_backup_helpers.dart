@@ -11,6 +11,31 @@ import '../../services/csv_service.dart';
 Future<void> showTelegramSetupDialog(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
   final backupService = CloudBackupService();
+  if (txVm.allTransactions.isNotEmpty) {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Confirm Restore'),
+          content: const Text(
+            'You currently have transactions in the app. Restoring will add the backup transactions on top of your existing ones.\n\n'
+            'Do you want to proceed?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Proceed'),
+            ),
+          ],
+        );
+      },
+    );
+    if (proceed != true) return;
+  }
   final existingToken = backupService.telegramBotToken;
 
   await showDialog<void>(
@@ -127,6 +152,31 @@ Future<void> showTelegramSetupDialog(BuildContext context) async {
 Future<void> handleGoogleBackup(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
   final backupService = CloudBackupService();
+  if (txVm.allTransactions.isNotEmpty) {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Confirm Restore'),
+          content: const Text(
+            'You currently have transactions in the app. Restoring will add the backup transactions on top of your existing ones.\n\n'
+            'Do you want to proceed?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Proceed'),
+            ),
+          ],
+        );
+      },
+    );
+    if (proceed != true) return;
+  }
   final crypto = CryptoService();
 
   // Security Warning if not encrypted
@@ -230,6 +280,31 @@ Future<void> handleGoogleBackup(BuildContext context) async {
 Future<void> handleTelegramRestore(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
   final backupService = CloudBackupService();
+  if (txVm.allTransactions.isNotEmpty) {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Confirm Restore'),
+          content: const Text(
+            'You currently have transactions in the app. Restoring will add the backup transactions on top of your existing ones.\n\n'
+            'Do you want to proceed?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Proceed'),
+            ),
+          ],
+        );
+      },
+    );
+    if (proceed != true) return;
+  }
 
   showDialog(
     context: context,
@@ -276,13 +351,19 @@ Future<void> handleTelegramRestore(BuildContext context) async {
     if (context.mounted) {
       Navigator.of(context).pop(); // Close restoring dialog
       if (parsed != null && parsed.isNotEmpty) {
-        await txVm.addMultipleTransactions(parsed);
+        await txVm.addMultipleTransactions(parsed, isRestore: true);
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
-          LiquidGlassSnackBar(
-            context: context,
-            message: 'Successfully restored ${parsed.length} transactions!',
-            type: SnackBarType.success,
+          SnackBar(
+            content: Text('Successfully restored ${parsed.length} transactions!'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'UNDO',
+              textColor: Colors.white,
+              onPressed: () async {
+                await txVm.revertRestore();
+              },
+            ),
           ),
         );
       } else {
@@ -307,6 +388,31 @@ Future<void> handleTelegramRestore(BuildContext context) async {
 Future<void> handleGoogleRestore(BuildContext context) async {
   final txVm = context.read<TransactionViewModel>();
   final backupService = CloudBackupService();
+  if (txVm.allTransactions.isNotEmpty) {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Confirm Restore'),
+          content: const Text(
+            'You currently have transactions in the app. Restoring will add the backup transactions on top of your existing ones.\n\n'
+            'Do you want to proceed?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Proceed'),
+            ),
+          ],
+        );
+      },
+    );
+    if (proceed != true) return;
+  }
 
   showDialog(
     context: context,
@@ -389,13 +495,19 @@ Future<void> handleGoogleRestore(BuildContext context) async {
     if (context.mounted) {
       Navigator.of(context).pop(); // Close restoring dialog
       if (parsed != null && parsed.isNotEmpty) {
-        await txVm.addMultipleTransactions(parsed);
+        await txVm.addMultipleTransactions(parsed, isRestore: true);
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
-          LiquidGlassSnackBar(
-            context: context,
-            message: 'Successfully restored ${parsed.length} transactions!',
-            type: SnackBarType.success,
+          SnackBar(
+            content: Text('Successfully restored ${parsed.length} transactions!'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'UNDO',
+              textColor: Colors.white,
+              onPressed: () async {
+                await txVm.revertRestore();
+              },
+            ),
           ),
         );
       } else {

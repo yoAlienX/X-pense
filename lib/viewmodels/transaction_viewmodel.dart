@@ -31,6 +31,7 @@ class TransactionViewModel extends ChangeNotifier {
 
   // Pagination State
   int _displayLimit = 20;
+  List<String>? _lastRestoredIds;
 
   // Getters
   List<Transaction> get allTransactions => List.unmodifiable(_allTransactions);
@@ -46,6 +47,7 @@ class TransactionViewModel extends ChangeNotifier {
   SelectionState get selectionState => _selectionState;
   bool get balanceVisible => _balanceVisible;
   bool get isLoading => _isLoading;
+  bool get canUndoRestore => _lastRestoredIds != null;
   List<String> get categories => List.unmodifiable(_categories);
   String get defaultCategory => _defaultCategory;
   List<String> get accounts => List.unmodifiable(_accounts);
@@ -225,7 +227,8 @@ class TransactionViewModel extends ChangeNotifier {
   }
 
   /// Add multiple transactions at once
-  Future<void> addMultipleTransactions(List<Transaction> transactions) async {
+  Future<void> addMultipleTransactions(List<Transaction> transactions, {bool isRestore = false}) async {
+    if (isRestore) _lastRestoredIds = transactions.map((t) => t.id).toList();
     _allTransactions.addAll(transactions);
 
     // Recalculate balances for all transactions
@@ -238,6 +241,23 @@ class TransactionViewModel extends ChangeNotifier {
     // Apply filters to update the filtered list
     _applyFilters();
 
+    notifyListeners();
+  }
+
+  Future<void> revertRestore() async {
+    if (_lastRestoredIds == null) return;
+
+    _allTransactions.removeWhere((t) => _lastRestoredIds!.contains(t.id));
+    _lastRestoredIds = null;
+
+    await _recalculateAllBalances();
+
+    _allTransactions.sort((a, b) => b.date.compareTo(a.date));
+    _updateCurrentBalanceCache();
+
+    _applyFilters();
+
+    await _storage.saveTransactions(_allTransactions);
     notifyListeners();
   }
 
