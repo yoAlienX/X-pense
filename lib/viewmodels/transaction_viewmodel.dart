@@ -1,4 +1,5 @@
 // viewmodels/transaction_viewmodel.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/constants.dart';
@@ -136,7 +137,7 @@ class TransactionViewModel extends ChangeNotifier {
         print('Error parsing data: $e');
       }
     } catch (e) {
-      print('Error initializing: $e');
+      if (kDebugMode) debugPrint('Error initializing: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
