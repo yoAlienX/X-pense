@@ -38,6 +38,14 @@ class StorageService {
   static const String _failedAttemptsKey = 'lock_failed_attempts';
   static const String _lockoutUntilKey = 'lock_lockout_until_ms';
 
+  // Mail sync: the account email address is not sensitive on its own and
+  // lives in prefs; the app password is a credential and lives only in
+  // secure storage. Which source emails have already been reviewed is
+  // tracked so a re-sync doesn't re-surface the same messages.
+  static const String _mailAccountEmailKey = 'mail_account_email';
+  static const String _mailAppPasswordSecureKey = 'secure_mail_app_password';
+  static const String _mailProcessedKeysKey = 'mail_processed_message_keys';
+
   // Singleton pattern
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
@@ -455,5 +463,48 @@ class StorageService {
   Future<void> clearLockoutState() async {
     await prefs.remove(_failedAttemptsKey);
     await prefs.remove(_lockoutUntilKey);
+  }
+
+  // -------------------- Mail sync --------------------
+
+  String? getMailAccountEmail() => prefs.getString(_mailAccountEmailKey);
+
+  Future<void> saveMailAccountEmail(String email) async {
+    await prefs.setString(_mailAccountEmailKey, email);
+  }
+
+  Future<String?> getMailAppPassword() async {
+    return _secure.read(key: _mailAppPasswordSecureKey);
+  }
+
+  Future<void> saveMailAppPassword(String appPassword) async {
+    await _secure.write(key: _mailAppPasswordSecureKey, value: appPassword);
+  }
+
+  /// Remove the stored mail account entirely (email, credential, and the
+  /// "already reviewed" message history).
+  Future<void> clearMailAccount() async {
+    await prefs.remove(_mailAccountEmailKey);
+    await prefs.remove(_mailProcessedKeysKey);
+    await _secure.delete(key: _mailAppPasswordSecureKey);
+  }
+
+  bool get hasMailAccountConfigured => getMailAccountEmail() != null;
+
+  /// Keys (mailbox UIDVALIDITY:UID) of messages already shown to the user
+  /// in a previous sync, so re-syncing doesn't re-surface them.
+  Set<String> getProcessedMailKeys() {
+    return (prefs.getStringList(_mailProcessedKeysKey) ?? const []).toSet();
+  }
+
+  Future<void> addProcessedMailKeys(Iterable<String> keys) async {
+    final current = getProcessedMailKeys();
+    current.addAll(keys);
+    // Bound the history so this doesn't grow forever; keep the most
+    // recent entries only.
+    final capped = current.length > 2000
+        ? current.skip(current.length - 2000).toSet()
+        : current;
+    await prefs.setStringList(_mailProcessedKeysKey, capped.toList());
   }
 }

@@ -15,6 +15,7 @@ import '../../utils/formatters.dart';
 import '../../services/cloud_backup_service.dart';
 import '../../viewmodels/theme_viewmodel.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
+import '../mail_sync/mail_sync_screen.dart';
 import '../widgets/liquid_glass_snackbar.dart';
 import '../widgets/radial_theme_switch.dart';
 import 'lock_overlay_dialog.dart';
@@ -875,6 +876,45 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
         ),
         const SizedBox(height: 20),
 
+        // ── Mail Sync Section ────────────────────────────────────────────
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Sync from Email',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Connect Gmail to pull in Canara Bank / SBI transaction '
+                  'alerts for review before they\'re added.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const MailSyncScreen(),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.mark_email_read_outlined),
+                    label: const Text('Open Mail Sync'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
         // ── Clear All Data Section ────────────────────────────────────────
         Card(
           child: Padding(

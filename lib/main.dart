@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'app_theme.dart';
 import 'services/storage_service.dart';
 import 'viewmodels/app_lock_viewmodel.dart';
+import 'viewmodels/mail_sync_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
 import 'viewmodels/transaction_viewmodel.dart';
 import 'views/home/home_screen.dart';
@@ -46,6 +47,7 @@ class ExpenseTrackerApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => AppLockViewModel()..initialize()),
         ChangeNotifierProvider(create: (_) => CloudBackupService()),
+        ChangeNotifierProvider(create: (_) => MailSyncViewModel()),
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, themeVm, _) {
