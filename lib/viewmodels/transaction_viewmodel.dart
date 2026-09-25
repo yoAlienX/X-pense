@@ -5,6 +5,8 @@ import '../utils/constants.dart';
 import '../models/transaction.dart';
 import '../models/filter_state.dart';
 import '../services/storage_service.dart';
+import '../services/csv_service.dart';
+import '../services/crypto_service.dart';
 
 class TransactionViewModel extends ChangeNotifier {
   final StorageService _storage = StorageService();
@@ -24,17 +26,30 @@ class TransactionViewModel extends ChangeNotifier {
   double _currentBalance = 0.0;
   List<String> _categories = List<String>.from(AppConstants.categories);
   String _defaultCategory = 'Uncategorized';
+  List<String> _accounts = ['Canara Bank'];
+  bool _showTotalBalance = false;
+
+  // Pagination State
+  int _displayLimit = 20;
 
   // Getters
   List<Transaction> get allTransactions => List.unmodifiable(_allTransactions);
   List<Transaction> get filteredTransactions =>
       List.unmodifiable(_filteredTransactions);
+  List<Transaction> get paginatedTransactions {
+    if (_filteredTransactions.length <= _displayLimit) {
+      return List.unmodifiable(_filteredTransactions);
+    }
+    return List.unmodifiable(_filteredTransactions.take(_displayLimit));
+  }
   FilterState get filterState => _filterState;
   SelectionState get selectionState => _selectionState;
   bool get balanceVisible => _balanceVisible;
   bool get isLoading => _isLoading;
   List<String> get categories => List.unmodifiable(_categories);
   String get defaultCategory => _defaultCategory;
+  List<String> get accounts => List.unmodifiable(_accounts);
+  bool get showTotalBalance => _showTotalBalance;
 
   // ==================== FIXED BALANCE CALCULATION ====================
 
@@ -56,13 +71,21 @@ class TransactionViewModel extends ChangeNotifier {
   /// Net flow (income - expenses) for filtered transactions
   double get netFlow => totalIncome - totalExpense;
 
+  bool _needsDecryptionKey = false;
+  bool get needsDecryptionKey => _needsDecryptionKey;
+
   // ==================== Initialization ====================
 
   Future<void> initialize() async {
     _isLoading = true;
+    _needsDecryptionKey = false;
     notifyListeners();
 
     try {
+      // Check if hash has expired (older than 30 days) and remove if necessary.
+      final crypto = CryptoService();
+      await crypto.checkAndEnforceHashExpiration();
+
       // Load transactions from storage
       _allTransactions = await _storage.loadTransactions();
 
@@ -94,8 +117,22 @@ class TransactionViewModel extends ChangeNotifier {
         _defaultCategory = _categories.first;
       }
 
+      _accounts = _storage.getAccounts() ?? ['Canara Bank'];
+      if (_accounts.isEmpty) {
+        _accounts = ['Canara Bank'];
+      }
+
+      _showTotalBalance = _storage.getShowTotalBalance();
+
       // Apply initial filters
       _applyFilters();
+      _displayLimit = 20; // reset pagination limit
+    } on FormatException catch (e) {
+      if (e.message == 'needs_decryption') {
+        _needsDecryptionKey = true;
+      } else {
+        print('Error parsing data: $e');
+      }
     } catch (e) {
       print('Error initializing: $e');
     } finally {
@@ -121,13 +158,15 @@ class TransactionViewModel extends ChangeNotifier {
     final chronological = _allTransactions.toList()
       ..sort((a, b) => a.date.compareTo(b.date));
 
-    // Calculate running balance
-    double runningBalance = 0.0;
+    // Calculate running balance per account
+    Map<String, double> runningBalances = {};
 
     for (var txn in chronological) {
+      double currentAccBal = runningBalances[txn.account] ?? 0.0;
       // Update running balance: add credits, subtract debits
-      runningBalance = runningBalance + txn.credit - txn.debit;
-      txn.balance = runningBalance;
+      currentAccBal = currentAccBal + txn.credit - txn.debit;
+      runningBalances[txn.account] = currentAccBal;
+      txn.balance = currentAccBal;
     }
 
     if (persistToStorage) {
@@ -142,8 +181,28 @@ class TransactionViewModel extends ChangeNotifier {
       return;
     }
 
-    // List is maintained newest-first where balance of first item is current.
-    _currentBalance = _allTransactions.first.balance;
+    if (_showTotalBalance) {
+      Map<String, double> latestBalances = {};
+      for (var txn in _allTransactions) {
+        if (!latestBalances.containsKey(txn.account)) {
+          latestBalances[txn.account] = txn.balance;
+        }
+      }
+      _currentBalance = latestBalances.values.fold(0.0, (sum, val) => sum + val);
+    } else {
+      // List is maintained newest-first where balance of first item is current.
+      _currentBalance = _allTransactions.first.balance;
+    }
+  }
+
+  double getAccountBalance(String account) {
+    if (_allTransactions.isEmpty) return 0.0;
+    for (var txn in _allTransactions) {
+      if (txn.account == account) {
+        return txn.balance;
+      }
+    }
+    return 0.0;
   }
 
   // ==================== Transaction Management ====================
@@ -292,6 +351,156 @@ class TransactionViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ==================== Account Management ====================
+
+  Future<void> addAccount(String account) async {
+    final trimmed = account.trim();
+    if (trimmed.isEmpty || _accounts.contains(trimmed)) return;
+
+    _accounts.add(trimmed);
+    await _storage.saveAccounts(_accounts);
+    notifyListeners();
+  }
+
+  Future<void> deleteAccount(String account) async {
+    if (!_accounts.contains(account) || _accounts.length <= 1) return;
+
+    _accounts.remove(account);
+    await _storage.saveAccounts(_accounts);
+
+    // We intentionally DO NOT modify or delete the historical transactions
+    // associated with the deleted account. This preserves the transaction history.
+    // The balances of other active accounts remain unaffected.
+
+    await _recalculateAllBalances();
+    _updateCurrentBalanceCache();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  Future<void> editAccountBalance(String account, double newBalance) async {
+    if (!_accounts.contains(account)) return;
+
+    // Remove the previous initial balance transaction if it exists
+    _allTransactions.removeWhere((txn) => txn.account == account && txn.category == 'Initial Balance');
+
+    if (newBalance != 0.0) {
+      final t = Transaction(
+        id: 'initial_balance_${DateTime.now().millisecondsSinceEpoch}_$account',
+        date: DateTime.now(),
+        description: 'Initial Balance',
+        referenceNo: 'SYSTEM',
+        debit: newBalance < 0 ? newBalance.abs() : 0.0,
+        credit: newBalance > 0 ? newBalance : 0.0,
+        balance: newBalance,
+        type: newBalance >= 0 ? 'Credit' : 'Debit',
+        category: 'Initial Balance',
+        account: account,
+      );
+      _allTransactions.add(t);
+    }
+
+    await _recalculateAllBalances();
+
+    // Re-sort for display (newest first)
+    _allTransactions.sort((a, b) => b.date.compareTo(a.date));
+    _updateCurrentBalanceCache();
+
+    _applyFilters();
+    notifyListeners();
+  }
+
+  Future<void> setShowTotalBalance(bool showTotal) async {
+    _showTotalBalance = showTotal;
+    await _storage.saveShowTotalBalance(showTotal);
+    _updateCurrentBalanceCache();
+    notifyListeners();
+  }
+
+  // ==================== Archiving Data ====================
+
+  Future<void> archiveOldTransactions(DateTime cutoffDate) async {
+    // Separate transactions into old and new based on the cutoff date
+    List<Transaction> oldTxs = [];
+    List<Transaction> keptTxs = [];
+
+    // We will calculate a single carry-forward balance for each account
+    Map<String, double> carryForwardBalances = {};
+
+    // For calculation, we process chronologically
+    final chronological = _allTransactions.toList()..sort((a, b) => a.date.compareTo(b.date));
+
+    for (var tx in chronological) {
+      if (tx.date.isBefore(cutoffDate)) {
+        oldTxs.add(tx);
+        double currentBal = carryForwardBalances[tx.account] ?? 0.0;
+        currentBal = currentBal + tx.credit - tx.debit;
+        carryForwardBalances[tx.account] = currentBal;
+      } else {
+        keptTxs.add(tx);
+      }
+    }
+
+    if (oldTxs.isEmpty) return; // Nothing to archive
+
+    // Export the old transactions so the user doesn't permanently lose them
+    try {
+      final csvService = CsvService();
+      await csvService.exportAndShare(
+        oldTxs,
+        isBackup: true,
+        subject: 'Expense Tracker Archive Backup',
+        text: 'Archived backup of ${oldTxs.length} old transactions before $cutoffDate.',
+      );
+    } catch (e) {
+      debugPrint('Archive export error: $e');
+      // If we fail to export, we should probably abort clearing to prevent data loss.
+      // But we will continue based on user intention of clearing space.
+    }
+
+    // Replace old transactions with Carry Forward markers
+    _allTransactions = List.from(keptTxs);
+
+    for (var entry in carryForwardBalances.entries) {
+      if (entry.value != 0.0) {
+        _allTransactions.add(
+          Transaction(
+            id: 'carry_forward_${DateTime.now().millisecondsSinceEpoch}_${entry.key}',
+            date: cutoffDate,
+            description: 'Carry-Forward Balance',
+            referenceNo: 'SYSTEM_ARCHIVE',
+            debit: entry.value < 0 ? entry.value.abs() : 0.0,
+            credit: entry.value > 0 ? entry.value : 0.0,
+            balance: entry.value,
+            type: entry.value >= 0 ? 'Credit' : 'Debit',
+            category: 'Initial Balance',
+            account: entry.key,
+          ),
+        );
+      }
+    }
+
+    await _recalculateAllBalances();
+    _allTransactions.sort((a, b) => b.date.compareTo(a.date));
+    _updateCurrentBalanceCache();
+    _applyFilters();
+    notifyListeners();
+  }
+
+  // ==================== Pagination ====================
+
+  void loadMoreTransactions() {
+    if (_displayLimit < _filteredTransactions.length) {
+      _displayLimit += 20;
+      notifyListeners();
+    }
+  }
+
+  void resetPagination() {
+    _displayLimit = 20;
+    notifyListeners();
+  }
+
   // ==================== Filtering ====================
 
   void setTypeFilter(String filter) {
@@ -337,6 +546,10 @@ class TransactionViewModel extends ChangeNotifier {
   }
 
   void _applyFilters() {
+    // Reset pagination whenever filters change to ensure the user
+    // sees the top of the newly filtered list.
+    _displayLimit = 20;
+
     final hasDefaultFilters =
         _filterState.typeFilter == 'All' &&
         _filterState.monthFilter == 'All' &&

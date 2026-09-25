@@ -1,7 +1,10 @@
 // services/storage_service.dart
 import 'dart:convert';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/transaction.dart';
+import 'crypto_service.dart';
 
 class StorageService {
   static const String _transactionsKey = 'transactions';
@@ -9,11 +12,14 @@ class StorageService {
   static const String _balanceVisibilityKey = 'balanceVisible';
   static const String _categoriesKey = 'categories';
   static const String _defaultCategoryKey = 'defaultCategory';
+  static const String _accountsKey = 'accounts';
+  static const String _showTotalBalanceKey = 'showTotalBalance';
   static const String _passcodeEnabledKey = 'passcodeEnabled';
   static const String _biometricEnabledKey = 'biometricEnabled';
   static const String _faceAuthEnabledKey = 'faceAuthEnabled';
   static const String _passcodeKey = 'passcode';
   static const String _securityQuestionsKey = 'securityQuestions';
+  static const String _onboardingCompleteKey = 'onboardingComplete';
 
   // Singleton pattern
   static final StorageService _instance = StorageService._internal();
@@ -41,7 +47,11 @@ class StorageService {
     try {
       final jsonData = transactions.map((t) => t.toJson()).toList();
       final jsonString = jsonEncode(jsonData);
-      return await prefs.setString(_transactionsKey, jsonString);
+
+      final crypto = CryptoService();
+      final encryptedData = crypto.hasSecretKey ? crypto.encryptData(jsonString) : jsonString;
+
+      return await prefs.setString(_transactionsKey, encryptedData);
     } catch (e) {
       print('Error saving transactions: $e');
       return false;
@@ -50,16 +60,40 @@ class StorageService {
 
   /// Load transactions from storage
   Future<List<Transaction>> loadTransactions() async {
-    try {
-      final jsonString = prefs.getString(_transactionsKey);
-      if (jsonString == null || jsonString.isEmpty) {
-        return [];
+    final storedData = prefs.getString(_transactionsKey);
+    if (storedData == null || storedData.isEmpty) {
+      return [];
+    }
+
+    final crypto = CryptoService();
+
+    // Check if the payload looks encrypted (base64 with an IV colon delimiter and no JSON brackets)
+    if (storedData.contains(':') && !storedData.startsWith('[')) {
+      if (!crypto.hasSecretKey) {
+        throw const FormatException('needs_decryption');
       }
 
-      final List<dynamic> jsonData = jsonDecode(jsonString);
+      final decryptedString = crypto.decryptData(storedData);
+
+      // If decryption failed and returned the original string, or garbage
+      if (decryptedString.contains(':') && !decryptedString.startsWith('[')) {
+        throw const FormatException('needs_decryption');
+      }
+
+      try {
+        final List<dynamic> jsonData = jsonDecode(decryptedString);
+        return jsonData.map((json) => Transaction.fromJson(json)).toList();
+      } catch (e) {
+        throw const FormatException('needs_decryption');
+      }
+    }
+
+    // Unencrypted Payload
+    try {
+      final List<dynamic> jsonData = jsonDecode(storedData);
       return jsonData.map((json) => Transaction.fromJson(json)).toList();
     } catch (e) {
-      print('Error loading transactions: $e');
+      print('Error parsing plain transactions: $e');
       return [];
     }
   }
@@ -118,6 +152,68 @@ class StorageService {
   /// Save default category
   Future<bool> saveDefaultCategory(String category) async {
     return await prefs.setString(_defaultCategoryKey, category);
+  }
+
+  // ==================== Account Storage ====================
+
+  /// Get account list
+  List<String>? getAccounts() {
+    return prefs.getStringList(_accountsKey);
+  }
+
+  /// Save account list
+  Future<bool> saveAccounts(List<String> accounts) async {
+    return await prefs.setStringList(_accountsKey, accounts);
+  }
+
+  /// Get show total balance preference
+  bool getShowTotalBalance() {
+    return prefs.getBool(_showTotalBalanceKey) ?? false;
+  }
+
+  /// Save show total balance preference
+  Future<bool> saveShowTotalBalance(bool showTotal) async {
+    return await prefs.setBool(_showTotalBalanceKey, showTotal);
+  }
+
+  // ==================== Onboarding Storage ====================
+
+  /// Check if onboarding is completed
+  Future<bool> hasCompletedOnboarding() async {
+    // Check SharedPreferences first
+    final bool prefsCompleted = prefs.getBool(_onboardingCompleteKey) ?? false;
+    if (prefsCompleted) return true;
+
+    // Fallback: Check local document directory for resilient flag file
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/.onboarding_flag');
+      if (await file.exists()) {
+        // Sync the preference back so it's correct next time
+        await saveOnboardingComplete();
+        return true;
+      }
+    } catch (e) {
+      print('Error checking resilient onboarding flag: $e');
+    }
+
+    return false;
+  }
+
+  /// Mark onboarding as completed
+  Future<bool> saveOnboardingComplete() async {
+    bool prefsResult = await prefs.setBool(_onboardingCompleteKey, true);
+
+    // Save resilient flag to file system to survive shared preferences clearing
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final file = File('${directory.path}/.onboarding_flag');
+      await file.writeAsString('1');
+    } catch (e) {
+      print('Error saving resilient onboarding flag: $e');
+    }
+
+    return prefsResult;
   }
 
   // ==================== General Utilities ====================
