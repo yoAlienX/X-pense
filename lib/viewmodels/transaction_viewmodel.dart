@@ -134,7 +134,7 @@ class TransactionViewModel extends ChangeNotifier {
         print('Error parsing data: $e');
       }
     } catch (e) {
-      print('Error initializing: $e');
+      debugPrint('Error initializing: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
