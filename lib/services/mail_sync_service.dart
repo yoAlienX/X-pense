@@ -85,16 +85,13 @@ class MailSyncService {
       final sinceStr = _imapDate(since);
 
       for (final bankDomain in BankEmailParser.knownSenderDomains.keys) {
-        final searchResult = await client.searchMessages(
+        final searchResult = await client.uidSearchMessages(
           searchCriteria: 'FROM "$bankDomain" SINCE $sinceStr',
         );
         final sequence = searchResult.matchingSequence;
-        if (sequence == null || sequence.isEmpty()) continue;
+        if (sequence == null || sequence.isEmpty) continue;
 
-        final fetchResult = await client.fetchMessageSequence(
-          sequence,
-          fetchPreference: FetchPreference.full,
-        );
+        final fetchResult = await client.uidFetchMessages(sequence, 'BODY[]');
 
         for (final message in fetchResult.messages) {
           final uid = message.uid;
