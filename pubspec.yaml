@@ -20,8 +20,6 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   provider: ^6.1.2
   local_auth: ^2.3.0
-  flutter_secure_storage: ^9.2.2
-  crypto: ^3.0.3
   enough_mail: ^2.1.6
   fl_chart: ^1.1.1
   dropdown_button2: ^2.3.9
