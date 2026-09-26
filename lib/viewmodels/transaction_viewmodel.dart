@@ -134,7 +134,7 @@ class TransactionViewModel extends ChangeNotifier {
       if (e.message == 'needs_decryption') {
         _needsDecryptionKey = true;
       } else {
-        print('Error parsing data: $e');
+        if (kDebugMode) debugPrint('Error parsing data: $e');
       }
     } catch (e) {
       if (kDebugMode) debugPrint('Error initializing: $e');
