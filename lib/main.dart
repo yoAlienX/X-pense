@@ -5,16 +5,30 @@ import 'package:provider/provider.dart';
 import 'app_theme.dart';
 import 'services/storage_service.dart';
 import 'viewmodels/app_lock_viewmodel.dart';
+import 'viewmodels/mail_sync_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
 import 'viewmodels/transaction_viewmodel.dart';
 import 'views/home/home_screen.dart';
 import 'views/lock/lock_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'views/loading_screen.dart';
 import 'views/widgets/theme_switcher.dart';
+import 'views/onboarding/onboarding_screen.dart';
+import 'views/lock/decryption_screen.dart';
+import 'services/cloud_backup_service.dart';
+import 'services/crypto_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Firebase.initializeApp();
+  } catch (e) {
+    debugPrint('Firebase init failed: $e');
+  }
+
   await StorageService().init();
+  await CryptoService().loadKeyFromSecureStorage();
   runApp(const ExpenseTrackerApp());
 }
 
@@ -32,6 +46,8 @@ class ExpenseTrackerApp extends StatelessWidget {
           create: (_) => TransactionViewModel()..initialize(),
         ),
         ChangeNotifierProvider(create: (_) => AppLockViewModel()..initialize()),
+        ChangeNotifierProvider(create: (_) => CloudBackupService()),
+        ChangeNotifierProvider(create: (_) => MailSyncViewModel()),
       ],
       child: Consumer<ThemeViewModel>(
         builder: (context, themeVm, _) {
@@ -95,6 +111,8 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
     with WidgetsBindingObserver {
   bool _minimumSplashElapsed = false;
   bool _hasShownInitialContent = false;
+  bool _isOnboardingComplete = true; // Assume true until checked
+  bool _hasCheckedOnboarding = false;
   AppLifecycleState? _lastState;
 
   @override
@@ -105,11 +123,24 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
       if (!mounted) return;
       context.read<TransactionViewModel>().forceMaskBalance();
     });
+
+    _checkOnboardingStatus();
+
     Future<void>.delayed(const Duration(milliseconds: 1700), () {
       if (mounted) {
         setState(() => _minimumSplashElapsed = true);
       }
     });
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final hasCompleted = await StorageService().hasCompletedOnboarding();
+    if (mounted) {
+      setState(() {
+        _isOnboardingComplete = hasCompleted;
+        _hasCheckedOnboarding = true;
+      });
+    }
   }
 
   @override
@@ -139,7 +170,7 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
 
     final shouldShowStartupSplash =
         !_hasShownInitialContent &&
-        (vm.isLoading || lockVm.isInitializing || !_minimumSplashElapsed);
+        (vm.isLoading || lockVm.isInitializing || !_minimumSplashElapsed || !_hasCheckedOnboarding);
 
     if (shouldShowStartupSplash) {
       return const LoadingScreen();
@@ -153,8 +184,16 @@ class _InitialRouteHandlerState extends State<_InitialRouteHandler>
       });
     }
 
+    if (!_isOnboardingComplete) {
+      return const OnboardingScreen();
+    }
+
     if (lockVm.shouldRequireLock && lockVm.isLocked) {
       return const LockScreen();
+    }
+
+    if (vm.needsDecryptionKey) {
+      return const DecryptionScreen();
     }
 
     return AnimatedSwitcher(

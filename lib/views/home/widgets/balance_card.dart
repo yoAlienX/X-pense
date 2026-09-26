@@ -7,7 +7,10 @@ import '../../../utils/constants.dart';
 import '../../../utils/formatters.dart';
 import '../../../viewmodels/transaction_viewmodel.dart';
 import '../../../viewmodels/theme_viewmodel.dart';
+import '../../../viewmodels/app_lock_viewmodel.dart';
 import '../../widgets/random_masking_text.dart';
+import '../../widgets/liquid_glass_snackbar.dart';
+import '../../lock/lock_overlay_dialog.dart';
 
 class BalanceCard extends StatelessWidget {
   /// Called when the user taps the income or expense summary tile.
@@ -28,7 +31,6 @@ class BalanceCard extends StatelessWidget {
       ),
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
         decoration: BoxDecoration(
           borderRadius: const BorderRadius.only(
             bottomLeft: Radius.circular(20),
@@ -49,69 +51,121 @@ class BalanceCard extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          children: [
-            // Balance label + visibility toggle
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Current Balance',
-                  style: TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-                Row(
-                  children: [
-                    if (vm.allTransactions.isEmpty)
-                      _iconButton(
-                        Icons.edit,
-                        'Set Initial Balance',
-                        () => _showInitialBalanceDialog(context, vm),
-                      ),
-                    _iconButton(
-                      vm.balanceVisible
-                          ? Icons.visibility
-                          : Icons.visibility_off,
-                      vm.balanceVisible ? 'Hide Balance' : 'Show Balance',
-                      () => vm.toggleBalanceVisibility(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Balance amount
-            RandomMaskingText(
-              text: Formatters.currency(vm.currentBalance),
-              obscured: !vm.balanceVisible,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
+        child: vm.showTotalBalance
+          ? _buildSingleBalance(context, vm, "Total Balance", vm.currentBalance)
+          : _buildAccountSwiper(context, vm),
+      ),
+    );
+  }
+
+  Widget _buildAccountSwiper(BuildContext context, TransactionViewModel vm) {
+    if (vm.accounts.isEmpty) {
+      return _buildSingleBalance(context, vm, "Total Balance", vm.currentBalance);
+    }
+
+    return SizedBox(
+      height: 250,
+      child: PageView.builder(
+        itemCount: vm.accounts.length,
+        itemBuilder: (context, index) {
+          final account = vm.accounts[index];
+          final balance = vm.getAccountBalance(account);
+          return _buildSingleBalance(context, vm, account, balance);
+        },
+      ),
+    );
+  }
+
+  Widget _buildSingleBalance(BuildContext context, TransactionViewModel vm, String title, double balanceAmount) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      child: Column(
+        children: [
+          // Balance label + visibility toggle
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
               ),
+              Row(
+                children: [
+                  if (vm.allTransactions.isEmpty)
+                    _iconButton(
+                      Icons.edit,
+                      'Set Initial Balance',
+                      () => _showInitialBalanceDialog(context, vm),
+                    ),
+                  _iconButton(
+                    vm.balanceVisible
+                        ? Icons.visibility
+                        : Icons.visibility_off,
+                    vm.balanceVisible ? 'Hide Balance' : 'Show Balance',
+                    () async {
+                      if (vm.balanceVisible) {
+                        await vm.toggleBalanceVisibility();
+                      } else {
+                        final lockVm = context.read<AppLockViewModel>();
+                        if (lockVm.passcodeEnabled) {
+                          final authSuccess = await lockVm.authenticate(() => showLockOverlayDialog(context));
+                          if (authSuccess) {
+                            await vm.toggleBalanceVisibility();
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).clearSnackBars();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                LiquidGlassSnackBar(
+                                  context: context,
+                                  message: 'Authentication required to reveal balances',
+                                  type: SnackBarType.error,
+                                ),
+                              );
+                            }
+                          }
+                        } else {
+                          await vm.toggleBalanceVisibility();
+                        }
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Balance amount
+          RandomMaskingText(
+            text: Formatters.currency(balanceAmount),
+            obscured: !vm.balanceVisible,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 20),
-            // Income / Expense tiles
-            Row(
-              children: [
-                _SummaryTile(
-                  label: 'Income',
-                  amount: vm.totalIncome,
-                  visible: vm.balanceVisible,
-                  isIncome: true,
-                  onTap: () => onSummaryTap?.call(true),
-                ),
-                const SizedBox(width: 16),
-                _SummaryTile(
-                  label: 'Expense',
-                  amount: vm.totalExpense,
-                  visible: vm.balanceVisible,
-                  isIncome: false,
-                  onTap: () => onSummaryTap?.call(false),
-                ),
-              ],
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          // Income / Expense tiles
+          Row(
+            children: [
+              _SummaryTile(
+                label: 'Income',
+                amount: vm.totalIncome,
+                visible: vm.balanceVisible,
+                isIncome: true,
+                onTap: () => onSummaryTap?.call(true),
+              ),
+              const SizedBox(width: 16),
+              _SummaryTile(
+                label: 'Expense',
+                amount: vm.totalExpense,
+                visible: vm.balanceVisible,
+                isIncome: false,
+                onTap: () => onSummaryTap?.call(false),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -125,6 +125,13 @@ class TransactionDetailSheet extends StatelessWidget {
 
               const SizedBox(height: 16),
 
+              _DetailRow(
+                'Account',
+                transaction.account,
+              ),
+
+              const SizedBox(height: 16),
+
               // Category picker
               Row(
                 children: [
@@ -243,6 +250,7 @@ class TransactionDetailSheet extends StatelessWidget {
 
                     // Show success notification
                     if (context.mounted) {
+                      ScaffoldMessenger.of(context).clearSnackBars();
                       ScaffoldMessenger.of(context).showSnackBar(
                         LiquidGlassSnackBar(
                           context: context,
