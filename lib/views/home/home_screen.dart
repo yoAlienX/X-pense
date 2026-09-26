@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 
 import '../../liquid_glass/liquid_glass_navbar.dart';
 import '../../services/csv_service.dart';
@@ -38,7 +39,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   // ── state ──────────────────────────────────────────────────────────────────
   int _currentTab = _kTabTransactions;
-  final List<int> _tabHistory = <int>[];
   bool _isProgrammaticPageChange = false;
   bool _isTabTransitioning = false;
   bool _showFilters = false;
@@ -115,13 +115,12 @@ class _HomeScreenState extends State<HomeScreen> {
           return;
         }
 
-        // If on home screen with no history, show exit confirmation
-        if (_currentTab == _kTabTransactions && _tabHistory.isEmpty) {
+        if (_currentTab == _kTabTransactions) {
           _handleExitPress(context);
           return;
         }
 
-        _handleTabBackNavigation();
+        _animateToTab(_kTabTransactions, pushToHistory: false);
       },
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
@@ -150,10 +149,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     // This prevents navbar animation repetition by ensuring it plays only once.
                     setState(() => _currentTab = index);
 
-                    // Only track history for gesture-based (non-programmatic) changes
-                    if (!_isProgrammaticPageChange) {
-                      _pushTabHistory(_currentTab);
-                    }
                   }
                 },
                 children: [
@@ -185,34 +180,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _pushTabHistory(int tab) {
-    if (_tabHistory.isEmpty || _tabHistory.last != tab) {
-      _tabHistory.add(tab);
-    }
-  }
-
-  void _handleTabBackNavigation() {
-    if (_tabHistory.isNotEmpty) {
-      final previousTab = _tabHistory.removeLast();
-      _animateToTab(previousTab, pushToHistory: false);
-      return;
-    }
-
-    if (_currentTab != _kTabTransactions) {
-      _animateToTab(_kTabTransactions, pushToHistory: false);
-    }
-  }
-
   Future<void> _animateToTab(int index, {required bool pushToHistory}) async {
     if (_isTabTransitioning || _currentTab == index) {
       return;
     }
 
     final fromIndex = _currentTab;
-
-    if (pushToHistory) {
-      _pushTabHistory(fromIndex);
-    }
 
     _isProgrammaticPageChange = true;
     _isTabTransitioning = true;
@@ -538,7 +511,8 @@ class _HomeScreenState extends State<HomeScreen> {
     TransactionViewModel vm,
     bool isKeyboardOpen,
   ) {
-    final filteredTransactions = vm.filteredTransactions;
+    final paginatedTransactions = vm.paginatedTransactions;
+    final totalFilteredCount = vm.filteredTransactions.length;
     final compactFilterLayout = MediaQuery.of(context).size.width - 32 < 430;
     final filterOverlayHeight = compactFilterLayout
         ? _kFilterOverlayHeightCompact
@@ -553,7 +527,13 @@ class _HomeScreenState extends State<HomeScreen> {
       onRefresh: () => vm.initialize(),
       color: AppConstants.primaryPurple,
       child: NotificationListener<ScrollNotification>(
-        onNotification: _handleScrollNotification,
+        onNotification: (ScrollNotification notification) {
+          if (notification.metrics.pixels >= notification.metrics.maxScrollExtent - 200) {
+            // Reached near the bottom, load more
+            vm.loadMoreTransactions();
+          }
+          return _handleScrollNotification(notification);
+        },
         child: CustomScrollView(
           controller: _txScrollController,
           physics: const AlwaysScrollableScrollPhysics(
@@ -605,7 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 6)),
 
-            if (filteredTransactions.isEmpty)
+            if (paginatedTransactions.isEmpty)
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
@@ -621,7 +601,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) {
-                      final t = filteredTransactions[i];
+                      if (i == paginatedTransactions.length) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Center(
+                            child: CircularProgressIndicator(color: AppConstants.primaryPurple),
+                          ),
+                        );
+                      }
+
+                      final t = paginatedTransactions[i];
                       return RepaintBoundary(
                         child: TransactionCard(
                           transaction: t,
@@ -674,7 +663,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       );
                     },
-                    childCount: filteredTransactions.length,
+                    childCount: paginatedTransactions.length < totalFilteredCount
+                        ? paginatedTransactions.length + 1
+                        : paginatedTransactions.length,
                     addAutomaticKeepAlives: false,
                     addRepaintBoundaries: true,
                     addSemanticIndexes: false,
@@ -735,7 +726,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final title = _currentTab == _kTabAnalytics
         ? 'Analytics'
         : _currentTab == _kTabSettings
-        ? 'Security'
+        ? 'Settings'
         : 'X-pense';
 
     // Normal AppBar — title left, lock + menu right
@@ -972,8 +963,8 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
 
-    if (shouldExit == true && context.mounted) {
-      Navigator.of(context).pop();
+    if (shouldExit == true) {
+      SystemNavigator.pop();
     }
   }
 
@@ -1412,6 +1403,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Navigator.pop(ctx);
 
                           if (context.mounted) {
+                            ScaffoldMessenger.of(context).clearSnackBars();
                             ScaffoldMessenger.of(context).showSnackBar(
                               LiquidGlassSnackBar(
                                 context: context,
@@ -1446,6 +1438,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (parsed == null) return;
       await vm.addMultipleTransactions(parsed);
       if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -1456,6 +1449,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -1479,6 +1473,7 @@ class _HomeScreenState extends State<HomeScreen> {
         : vm.filteredTransactions.toList();
 
     if (txs.isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         LiquidGlassSnackBar(
           context: context,
@@ -1503,6 +1498,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     } catch (e) {
       if (context.mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
