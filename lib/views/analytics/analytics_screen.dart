@@ -6,7 +6,9 @@ import '../../models/transaction.dart';
 import '../../utils/constants.dart';
 import '../../utils/formatters.dart';
 import '../../viewmodels/transaction_viewmodel.dart';
-import 'widgets/interactive_donut_chart.dart';
+import 'widgets/animated_pie_chart.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'widgets/animated_line_chart.dart';
 import 'widgets/zero_expense_chart.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -23,6 +25,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   String _selectedYear = 'All';
   int _selectedCategoryIndex = -1;
   bool _animatePieIn = false;
+  bool _showLineChart = false;
+  String _lineChartRange = 'Weekly';
   final Set<String> _hiddenCategories = <String>{};
   final ScrollController _legendScrollController = ScrollController();
 
@@ -164,16 +168,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Row(
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
+                            const Text(
                               'Expense Breakdown',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                            IconButton(
+                              icon: Icon(_showLineChart ? Icons.pie_chart : Icons.show_chart),
+                              onPressed: () {
+                                setState(() {
+                                  _showLineChart = !_showLineChart;
+                                });
+                              },
+                            )
                           ],
                         ),
                         const SizedBox(height: 12),
@@ -200,8 +212,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               );
                             },
                             child: KeyedSubtree(
-                              key: const ValueKey<String>('pie-view'),
-                              child: _buildPieView(sorted, totalExp),
+                              key: ValueKey<String>(_showLineChart ? 'line-view' : 'pie-view'),
+                              child: _showLineChart ? _buildLineView(filtered) : _buildPieView(sorted, totalExp),
                             ),
                           ),
                       ],
@@ -441,16 +453,18 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       return GestureDetector(
         onTap: () {
           setState(() {
-            _selectedCategoryIndex = _selectedCategoryIndex == idx ? -1 : idx;
+            if (visible) {
+              _hiddenCategories.add(entry.key);
+            } else {
+              _hiddenCategories.remove(entry.key);
+            }
           });
         },
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
           decoration: BoxDecoration(
-            color: _selectedCategoryIndex == idx
-                ? color.withAlpha(50)
-                : Colors.transparent,
+            color: _selectedCategoryIndex == idx ? color.withAlpha(50) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: visible ? Colors.transparent : AppConstants.greyText,
@@ -459,32 +473,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ),
           child: Row(
             children: [
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () {
-                  setState(() {
-                    if (visible) {
-                      _hiddenCategories.add(entry.key);
-                      if (_selectedCategoryIndex == idx) {
-                        _selectedCategoryIndex = -1;
-                      }
-                    } else {
-                      _hiddenCategories.remove(entry.key);
-                    }
-                  });
-                },
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: visible ? color : Colors.transparent,
-                    border: visible ? null : Border.all(color: color, width: 2),
-                  ),
-                  child: visible
-                      ? const Icon(Icons.check, size: 12, color: Colors.white)
-                      : null,
+              Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: visible ? color : Colors.transparent,
+                  border: visible ? null : Border.all(color: color, width: 2),
                 ),
+                child: visible
+                    ? const Icon(Icons.check, size: 12, color: Colors.white)
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -522,15 +521,17 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 child: SizedBox(
                   width: chartSize,
                   height: chartSize,
-                  child: InteractiveDonutChart(
+                  child: AnimatedPieChart(
                     size: chartSize,
                     strokeWidth: chartSize * 0.22,
-                    selectedIndex: _selectedCategoryIndex,
-                    onSelected: (idx) {
+                    backgroundColor: Colors.transparent,
+                    onSegmentTapped: (idx) {
                       setState(() {
-                        _selectedCategoryIndex = _selectedCategoryIndex == idx
-                            ? -1
-                            : idx;
+                        if (_selectedCategoryIndex == idx) {
+                           _selectedCategoryIndex = -1;
+                        } else {
+                           _selectedCategoryIndex = idx;
+                        }
                       });
                     },
                     segments: sorted.asMap().entries.map((me) {
@@ -538,11 +539,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       final entry = me.value;
                       final color = AppConstants
                           .chartColors[idx % AppConstants.chartColors.length];
-                      return DonutSegment(
+                      return PieChartSegment(
                         label: entry.key,
                         value: _animatePieIn ? entry.value : 0,
                         color: color,
-                        enabled: !_hiddenCategories.contains(entry.key),
+                        isSelected: !_hiddenCategories.contains(entry.key),
                       );
                     }).toList(),
                     centerBuilder: (context, total) {
@@ -594,6 +595,207 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         else
           ...legendRows,
       ],
+    );
+  }
+
+  Widget _buildLineView(List<Transaction> filteredTx) {
+    if (filteredTx.isEmpty) return const SizedBox();
+
+    final now = DateTime.now();
+
+    List<Transaction> chartTx = [];
+    if (_lineChartRange == 'Weekly') {
+      final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+      chartTx = filteredTx.where((tx) => tx.date.isAfter(startOfWeek.subtract(const Duration(days: 1))) && tx.date.isBefore(startOfWeek.add(const Duration(days: 7)))).toList();
+    } else if (_lineChartRange == '2 Weeks') {
+      final startOfLastWeek = now.subtract(Duration(days: now.weekday - 1 + 7));
+      chartTx = filteredTx.where((tx) => tx.date.isAfter(startOfLastWeek.subtract(const Duration(days: 1))) && tx.date.isBefore(startOfLastWeek.add(const Duration(days: 14)))).toList();
+    } else { // Monthly
+      chartTx = filteredTx.where((tx) => tx.date.year == now.year).toList();
+    }
+
+    Map<int, double> expensesByGroup = {};
+
+    for (var tx in chartTx) {
+      if (!tx.isExpense) continue;
+      int groupKey;
+      if (_lineChartRange == 'Weekly') {
+        groupKey = tx.date.weekday;
+      } else if (_lineChartRange == '2 Weeks') {
+        final startOfLastWeek = now.subtract(Duration(days: now.weekday - 1 + 7));
+        groupKey = tx.date.difference(startOfLastWeek).inDays + 1;
+      } else {
+        groupKey = tx.date.month;
+      }
+      expensesByGroup[groupKey] = (expensesByGroup[groupKey] ?? 0.0) + tx.debit;
+    }
+
+    List<FlSpot> spots = [];
+    double maxAmount = 0;
+
+    int maxGroup = _lineChartRange == 'Monthly' ? 12 : (_lineChartRange == '2 Weeks' ? 14 : 7);
+    for (int i = 1; i <= maxGroup; i++) {
+      double amount = expensesByGroup[i] ?? 0.0;
+      if (amount > maxAmount) maxAmount = amount;
+      spots.add(FlSpot(i.toDouble(), amount));
+    }
+
+    if (maxAmount == 0) maxAmount = 100;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Range selector
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: ['Weekly', '2 Weeks', 'Monthly'].map((range) {
+            final isSelected = _lineChartRange == range;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: ChoiceChipWidget(
+                label: range,
+                isSelected: isSelected,
+                onSelected: (selected) {
+                  if (selected) {
+                    setState(() => _lineChartRange = range);
+                  }
+                },
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 240,
+          child: AnimatedLineChart(
+            chartData: LineChartData(
+              gridData: const FlGridData(show: false),
+              lineTouchData: LineTouchData(
+                touchTooltipData: LineTouchTooltipData(
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
+                  getTooltipColor: (touchedSpot) => Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white.withAlpha(220)
+                      : Colors.black.withAlpha(220),
+                  getTooltipItems: (touchedSpots) {
+                    return touchedSpots.map((spot) {
+                      return LineTooltipItem(
+                        Formatters.currency(spot.y),
+                        TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.black
+                              : Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }).toList();
+                  },
+                ),
+              ),
+              titlesData: FlTitlesData(
+                show: true,
+                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 30,
+                    interval: 1,
+                    getTitlesWidget: (value, meta) {
+                      int intValue = value.toInt();
+                      String text = '';
+                      if (_lineChartRange == 'Monthly') {
+                        if (intValue >= 1 && intValue <= 12) {
+                          text = AppConstants.monthNames[intValue].substring(0, 3);
+                        }
+                      } else if (_lineChartRange == 'Weekly') {
+                        switch (intValue) {
+                          case 1: text = 'M'; break;
+                          case 2: text = 'T'; break;
+                          case 3: text = 'W'; break;
+                          case 4: text = 'T'; break;
+                          case 5: text = 'F'; break;
+                          case 6: text = 'S'; break;
+                          case 7: text = 'S'; break;
+                        }
+                      } else if (_lineChartRange == '2 Weeks') {
+                        if (intValue % 2 != 0) {
+                          text = intValue.toString();
+                        }
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(text, style: const TextStyle(fontSize: 10)),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              borderData: FlBorderData(show: false),
+              minX: 1,
+              maxX: maxGroup.toDouble(),
+              minY: 0,
+              maxY: maxAmount * 1.2,
+              lineBarsData: [
+                LineChartBarData(
+                  spots: spots,
+                  isCurved: false,
+                  color: AppConstants.primaryPurple,
+                  barWidth: 3,
+                  isStrokeCapRound: true,
+                  dotData: const FlDotData(show: true),
+                  belowBarData: BarAreaData(
+                    show: true,
+                    color: AppConstants.primaryPurple.withAlpha(30),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            '$_lineChartRange Expenses',
+            style: const TextStyle(fontWeight: FontWeight.w600, color: AppConstants.greyText),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class ChoiceChipWidget extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Function(bool) onSelected;
+
+  const ChoiceChipWidget({
+    Key? key,
+    required this.label,
+    required this.isSelected,
+    required this.onSelected,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: onSelected,
+      selectedColor: AppConstants.primaryPurple.withAlpha(50),
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      labelStyle: TextStyle(
+        color: isSelected ? AppConstants.primaryPurple : Theme.of(context).textTheme.bodyMedium?.color,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isSelected ? AppConstants.primaryPurple : Colors.grey.withAlpha(80),
+        ),
+      ),
     );
   }
 }

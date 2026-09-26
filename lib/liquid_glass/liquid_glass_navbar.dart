@@ -203,7 +203,10 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
   }
 
   void _onTabRowDragReleaseComplete() {
+    // If the gesture drag exactly matches the active tab, bypass the pill re-animation
+    // but ensure state sync
     _skipNextPillAnimation = true;
+    _pillController.value = 1.0;
   }
 
   void _onTap(int index) {
@@ -225,7 +228,7 @@ class _LiquidGlassNavBarState extends State<LiquidGlassNavBar>
     final tintColor = isDark
         ? Colors.white.withAlpha((cfg.tintOpacity * 255).round())
         : Colors.white.withAlpha(
-            (cfg.tintOpacity * 1.6 * 255).round().clamp(0, 255),
+            (cfg.tintOpacity * 2.2 * 255).round().clamp(0, 255),
           );
     final pillColor =
         cfg.pillColor ??
@@ -363,12 +366,42 @@ class _GlassPill extends StatelessWidget {
             // 2. Frosted tint
             Container(color: tintColor),
 
+            // Light mode extra frost layer
+            if (!isDark)
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    colors: [Colors.white54, Colors.transparent],
+                    radius: 1.5,
+                  ),
+                ),
+              ),
+
             // 3. Specular / iridescent edge highlight painted over everything
             CustomPaint(
               painter: _GlassEdgePainter(
                 borderRadius: borderRadius,
                 specularity: specularity,
                 isDark: isDark,
+              ),
+            ),
+
+            // Inner glow ring
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(borderRadius),
+                border: Border.all(
+                  color: isDark ? Colors.white24 : Colors.white60,
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark ? Colors.white12 : Colors.white30,
+                    blurStyle: BlurStyle.normal,
+                    blurRadius: 3.0,
+                    spreadRadius: -1.0,
+                  ),
+                ],
               ),
             ),
 
@@ -528,11 +561,11 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
     super.initState();
     _holdController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 60),
+      duration: const Duration(milliseconds: 180),
     );
     _holdAnim = CurvedAnimation(
       parent: _holdController,
-      curve: Curves.easeOutCubic,
+      curve: Curves.easeOutBack,
       reverseCurve: Curves.easeInCubic,
     );
 
@@ -553,6 +586,10 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
       // We just completed a drag-release. Signal parent to skip pill animation.
       widget.onDragReleaseComplete?.call();
       _pendingIndex = null;
+    } else if (widget.currentIndex != oldWidget.currentIndex && _pendingIndex == null) {
+      // A programmatic or tap navigation occurred, ensure no pending states conflict
+      _isReleasing = false;
+      _dragIndex = -1;
     }
   }
 
@@ -698,6 +735,10 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                             // Trigger navigation immediately; release animation is visual only.
                             widget.onTap(targetIndex);
 
+                            // The pill bounce drop effect (blob effect) logic
+                            // Add a little snap drop by reversing the hold scale quickly
+                            _holdController.reverse(from: 1.0);
+
                             _releaseController?.forward(from: 0).whenComplete(
                               () {
                                 if (!mounted) return;
@@ -707,8 +748,6 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                                 });
                               },
                             );
-
-                            _holdController.reverse();
                           };
                       },
                     ),
@@ -722,7 +761,7 @@ class _TabRowState extends State<_TabRow> with TickerProviderStateMixin {
                     top: 6,
                     bottom: 6,
                     child: Transform.scale(
-                      scale: 1 + (0.08 * _holdAnim.value),
+                      scale: 1 + (0.18 * _holdAnim.value),
                       child: _PillBackground(
                         color: widget.pillColor,
                         specularity: widget.specularity,
@@ -815,6 +854,25 @@ class _PillBackground extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32),
               color: color,
+            ),
+          ),
+
+          // Inner glow ring
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: isDark ? Colors.white24 : Colors.white60,
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.white12 : Colors.white30,
+                  blurStyle: BlurStyle.normal,
+                  blurRadius: 3.0,
+                  spreadRadius: -1.0,
+                ),
+              ],
             ),
           ),
 

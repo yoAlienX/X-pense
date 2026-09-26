@@ -11,6 +11,7 @@ class Transaction {
   double balance;      // Running balance after this transaction
   final String type;   // 'debit' or 'credit'
   String category;
+  String account;
 
   Transaction({
     required this.id,
@@ -22,6 +23,7 @@ class Transaction {
     required this.balance,
     required this.type,
     this.category = 'Uncategorized',
+    this.account = 'Canara Bank',
   });
 
   // Convenience getters
@@ -49,6 +51,7 @@ class Transaction {
     'balance': balance,
     'type': type,
     'category': category,
+    'account': account,
   };
 
   factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
@@ -61,6 +64,7 @@ class Transaction {
     balance: (json['balance'] as num).toDouble(),
     type: json['type'],
     category: json['category'] ?? 'Uncategorized',
+    account: json['account'] ?? 'Canara Bank',
   );
 
   // Create a copy with updated fields
@@ -74,6 +78,7 @@ class Transaction {
     double? balance,
     String? type,
     String? category,
+    String? account,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -85,9 +90,10 @@ class Transaction {
       balance: balance ?? this.balance,
       type: type ?? this.type,
       category: category ?? this.category,
+      account: account ?? this.account,
     );
   }
 
   @override
-  String toString() => 'Transaction(id: $id, date: $formattedDate, amount: ₹${amount.toStringAsFixed(2)}, type: $type, category: $category)';
+  String toString() => 'Transaction(id: $id, date: $formattedDate, amount: ₹${amount.toStringAsFixed(2)}, type: $type, category: $category, account: $account)';
 }
