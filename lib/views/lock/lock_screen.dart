@@ -101,7 +101,7 @@ class _LockScreenState extends State<LockScreen> {
                       child: SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: () => _unlock(vm),
+                          onPressed: vm.isLockedOut ? null : () => _unlock(vm),
                           child: const Text('Unlock'),
                         ),
                       ),
@@ -206,9 +206,23 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _unlock(AppLockViewModel vm) async {
+    if (vm.isLockedOut) {
+      final seconds = vm.lockoutRemaining.inSeconds.clamp(1, 999999);
+      setState(
+        () => _error = 'Too many attempts. Try again in ${seconds}s.',
+      );
+      return;
+    }
+
     final ok = await vm.unlockWithPasscode(_passcodeController.text.trim());
+    if (!mounted) return;
+
     if (!ok) {
-      setState(() => _error = 'Incorrect passcode');
+      setState(
+        () => _error = vm.isLockedOut
+            ? 'Too many attempts. Try again in ${vm.lockoutRemaining.inSeconds}s.'
+            : 'Incorrect passcode',
+      );
       return;
     }
 

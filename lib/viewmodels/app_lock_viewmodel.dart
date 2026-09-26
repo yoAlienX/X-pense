@@ -20,18 +20,23 @@ class AppLockViewModel extends ChangeNotifier {
     'What city were you born in?',
   ];
 
+  // Brute-force protection: after this many consecutive wrong entries the
+  // user is locked out for an escalating cooldown before trying again.
+  static const int _maxAttemptsBeforeLockout = 5;
+  static const Duration _baseLockoutDuration = Duration(seconds: 30);
+
   bool _isInitializing = true;
   bool _isLocked = false;
   bool _passcodeEnabled = false;
   bool _biometricEnabled = false;
   bool _biometricAvailable = false;
   String _lastBiometricError = '';
-  String _passcode = '';
+
+  int _failedAttempts = 0;
+  DateTime? _lockoutUntil;
 
   String _questionOne = '';
-  String _answerOne = '';
   String _questionTwo = '';
-  String _answerTwo = '';
 
   bool get isInitializing => _isInitializing;
   bool get isLocked => _isLocked;
@@ -45,6 +50,13 @@ class AppLockViewModel extends ChangeNotifier {
 
   String get questionOne => _questionOne;
   String get questionTwo => _questionTwo;
+
+  bool get isLockedOut =>
+      _lockoutUntil != null && DateTime.now().isBefore(_lockoutUntil!);
+  Duration get lockoutRemaining {
+    if (!isLockedOut) return Duration.zero;
+    return _lockoutUntil!.difference(DateTime.now());
+  }
 
   Future<void> _evaluateBiometricAvailability() async {
     try {
@@ -99,13 +111,13 @@ class AppLockViewModel extends ChangeNotifier {
   Future<void> initialize() async {
     _passcodeEnabled = _storage.getPasscodeEnabled();
     _biometricEnabled = _storage.getBiometricUnlockEnabled();
-    _passcode = _storage.getPasscode() ?? '';
+    final hasPasscode = await _storage.hasPasscode();
 
     final questions = _storage.getSecurityQuestions();
     _questionOne = questions['q1'] ?? '';
-    _answerOne = questions['a1'] ?? '';
     _questionTwo = questions['q2'] ?? '';
-    _answerTwo = questions['a2'] ?? '';
+
+    _restoreLockoutState();
 
     await _evaluateBiometricAvailability();
 
@@ -122,7 +134,7 @@ class AppLockViewModel extends ChangeNotifier {
       await CryptoService().loadKeyFromSecureStorage();
     } else {
       _isLocked = true;
-      if (_passcode.isEmpty) {
+      if (!hasPasscode) {
         _passcodeEnabled = false;
         _biometricEnabled = false;
         _isLocked = false;
@@ -134,6 +146,38 @@ class AppLockViewModel extends ChangeNotifier {
 
     _isInitializing = false;
     notifyListeners();
+  }
+
+  void _restoreLockoutState() {
+    _failedAttempts = _storage.getFailedAttempts();
+    final until = _storage.getLockoutUntilMs();
+    _lockoutUntil = until == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(until);
+    if (_lockoutUntil != null && !DateTime.now().isBefore(_lockoutUntil!)) {
+      // Cooldown already elapsed since the last session.
+      _lockoutUntil = null;
+    }
+  }
+
+  Future<void> _registerFailedAttempt() async {
+    _failedAttempts += 1;
+    await _storage.setFailedAttempts(_failedAttempts);
+
+    if (_failedAttempts >= _maxAttemptsBeforeLockout) {
+      // Escalate the cooldown for every block of failures beyond the
+      // threshold (30s, 60s, 90s, ...) instead of a fixed short delay.
+      final multiplier = 1 + (_failedAttempts - _maxAttemptsBeforeLockout);
+      final duration = _baseLockoutDuration * multiplier;
+      _lockoutUntil = DateTime.now().add(duration);
+      await _storage.setLockoutUntilMs(_lockoutUntil!.millisecondsSinceEpoch);
+    }
+  }
+
+  Future<void> _registerSuccessfulAttempt() async {
+    _failedAttempts = 0;
+    _lockoutUntil = null;
+    await _storage.clearLockoutState();
   }
 
   void enforceLockOnStartup() {
@@ -150,11 +194,8 @@ class AppLockViewModel extends ChangeNotifier {
     required String questionTwo,
     required String answerTwo,
   }) async {
-    _passcode = passcode;
     _questionOne = questionOne.trim();
-    _answerOne = answerOne.trim().toLowerCase();
     _questionTwo = questionTwo.trim();
-    _answerTwo = answerTwo.trim().toLowerCase();
 
     _passcodeEnabled = true;
     _isLocked = false;
@@ -163,20 +204,18 @@ class AppLockViewModel extends ChangeNotifier {
     await _storage.savePasscodeEnabled(true);
     await _storage.saveSecurityQuestions({
       'q1': _questionOne,
-      'a1': _answerOne,
+      'a1': answerOne.trim().toLowerCase(),
       'q2': _questionTwo,
-      'a2': _answerTwo,
+      'a2': answerTwo.trim().toLowerCase(),
     });
+    await _registerSuccessfulAttempt();
 
     notifyListeners();
   }
 
   Future<void> disablePasscode() async {
-    _passcode = '';
     _questionOne = '';
-    _answerOne = '';
     _questionTwo = '';
-    _answerTwo = '';
 
     _passcodeEnabled = false;
     _isLocked = false;
@@ -186,6 +225,7 @@ class AppLockViewModel extends ChangeNotifier {
     await _storage.clearPasscode();
     await _storage.clearSecurityQuestions();
     await _storage.saveBiometricUnlockEnabled(false);
+    await _registerSuccessfulAttempt();
 
     notifyListeners();
   }
@@ -205,18 +245,30 @@ class AppLockViewModel extends ChangeNotifier {
       return true;
     }
 
-    if (value == _passcode) {
+    if (isLockedOut) {
+      return false;
+    }
+
+    final ok = await _storage.verifyPasscode(value);
+    if (ok) {
       _isLocked = false;
       await CryptoService().loadKeyFromSecureStorage();
+      await _registerSuccessfulAttempt();
       notifyListeners();
       return true;
     }
 
+    await _registerFailedAttempt();
+    notifyListeners();
     return false;
   }
 
   Future<bool> unlockWithBiometric() async {
     if (!_passcodeEnabled || !_biometricAvailable || !_biometricEnabled) {
+      return false;
+    }
+    if (isLockedOut) {
+      _lastBiometricError = 'Too many attempts. Try again later.';
       return false;
     }
 
@@ -234,6 +286,7 @@ class AppLockViewModel extends ChangeNotifier {
       if (ok) {
         _isLocked = false;
         await CryptoService().loadKeyFromSecureStorage();
+        await _registerSuccessfulAttempt();
         notifyListeners();
       }
 
@@ -320,13 +373,23 @@ class AppLockViewModel extends ChangeNotifier {
     }
   }
 
-  bool verifySecurityAnswers({
+  Future<bool> verifySecurityAnswers({
     required String answerOne,
     required String answerTwo,
-  }) {
-    final one = answerOne.trim().toLowerCase();
-    final two = answerTwo.trim().toLowerCase();
-    return one == _answerOne && two == _answerTwo;
+  }) async {
+    if (isLockedOut) return false;
+
+    final ok = await _storage.verifySecurityAnswers(
+      answerOne: answerOne.trim().toLowerCase(),
+      answerTwo: answerTwo.trim().toLowerCase(),
+    );
+
+    if (!ok) {
+      await _registerFailedAttempt();
+      notifyListeners();
+    }
+
+    return ok;
   }
 
   Future<bool> resetPasscodeWithSecurityAnswers({
@@ -334,7 +397,7 @@ class AppLockViewModel extends ChangeNotifier {
     required String answerTwo,
     required String newPasscode,
   }) async {
-    final verified = verifySecurityAnswers(
+    final verified = await verifySecurityAnswers(
       answerOne: answerOne,
       answerTwo: answerTwo,
     );
@@ -342,8 +405,8 @@ class AppLockViewModel extends ChangeNotifier {
       return false;
     }
 
-    _passcode = newPasscode;
     await _storage.savePasscode(newPasscode);
+    await _registerSuccessfulAttempt();
     _isLocked = false;
     notifyListeners();
     return true;

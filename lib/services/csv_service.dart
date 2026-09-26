@@ -54,6 +54,11 @@ class CsvService {
     final List<Transaction> parsed = [];
     for (int i = 1; i < csvData.length; i++) {
       final row = csvData[i];
+      // A well-formed data row always has at least 7 columns (Date,
+      // Description, Reference, Debit, Credit, Balance, Type). Anything
+      // shorter is malformed/truncated input — skip it rather than let a
+      // bounds error surface with a misleading stack trace.
+      if (row.length < 7) continue;
       try {
         final date = DateFormat('dd-MM-yyyy').parse(row[0].toString());
         final debit =
@@ -113,14 +118,14 @@ class CsvService {
       ['Date', 'Description', 'Reference', 'Debit', 'Credit', 'Balance', 'Type', 'Category', 'Account'],
       ...transactions.map((t) => [
             DateFormat('dd-MM-yyyy').format(t.date),
-            t.description,
-            t.referenceNo,
+            _sanitizeForCsv(t.description),
+            _sanitizeForCsv(t.referenceNo),
             t.debit,
             t.credit,
             t.balance,
             t.type,
-            t.category,
-            t.account,
+            _sanitizeForCsv(t.category),
+            _sanitizeForCsv(t.account),
           ]),
     ];
 
@@ -145,6 +150,22 @@ class CsvService {
       subject: subject,
       text: text ?? 'Exported ${transactions.length} transactions',
     );
+  }
+
+  /// Neutralize CSV/formula injection. Spreadsheet apps (Excel, Sheets,
+  /// LibreOffice) treat a cell starting with =, +, -, @, tab or carriage
+  /// return as a formula. A transaction description imported from an
+  /// untrusted bank statement or edited by hand could contain one, and it
+  /// would silently execute when the exported/backup CSV is later opened.
+  /// Prefixing such cells with a leading apostrophe forces plain-text
+  /// interpretation while keeping the visible value unchanged.
+  String _sanitizeForCsv(String value) {
+    if (value.isEmpty) return value;
+    const dangerousPrefixes = ['=', '+', '-', '@', '\t', '\r'];
+    if (dangerousPrefixes.any((p) => value.startsWith(p))) {
+      return "'$value";
+    }
+    return value;
   }
 
   // ==================== Auto-categorization ====================

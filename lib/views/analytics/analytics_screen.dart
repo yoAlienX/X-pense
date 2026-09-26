@@ -672,6 +672,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               gridData: const FlGridData(show: false),
               lineTouchData: LineTouchData(
                 touchTooltipData: LineTouchTooltipData(
+                  fitInsideHorizontally: true,
+                  fitInsideVertically: true,
                   getTooltipColor: (touchedSpot) => Theme.of(context).brightness == Brightness.dark
                       ? Colors.white.withAlpha(220)
                       : Colors.black.withAlpha(220),
