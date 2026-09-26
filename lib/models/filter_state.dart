@@ -38,9 +38,25 @@ class FilterState {
       categoryFilter != 'All' ||
       searchQuery.isNotEmpty;
 
-  void clearFilters() {
-    // Return new instance with all filters cleared
-  }
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FilterState &&
+          runtimeType == other.runtimeType &&
+          typeFilter == other.typeFilter &&
+          monthFilter == other.monthFilter &&
+          yearFilter == other.yearFilter &&
+          categoryFilter == other.categoryFilter &&
+          searchQuery == other.searchQuery;
+
+  @override
+  int get hashCode => Object.hash(
+        typeFilter,
+        monthFilter,
+        yearFilter,
+        categoryFilter,
+        searchQuery,
+      );
 }
 
 class SelectionState {

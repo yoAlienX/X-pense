@@ -20,6 +20,9 @@ dependencies:
   flutter_launcher_icons: ^0.14.4
   provider: ^6.1.2
   local_auth: ^2.3.0
+  flutter_secure_storage: ^9.2.2
+  crypto: ^3.0.3
+  enough_mail: ^2.1.6
   fl_chart: ^1.1.1
   dropdown_button2: ^2.3.9
   crystal_navigation_bar: ^1.1.0
@@ -27,6 +30,15 @@ dependencies:
   motor: ^1.1.0
   oc_liquid_glass: ^0.2.1
   native_glass_navbar: ^1.0.1
+  encrypt: ^5.0.3
+  firebase_core: ^4.7.0
+  firebase_auth: ^6.4.0
+  google_sign_in: ^6.2.1
+  http: ^1.6.0
+  url_launcher: ^6.3.2
+  cloud_firestore: ^6.3.0
+  crypto: ^3.0.7
+  flutter_secure_storage: ^10.2.0
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:ui' as dart_ui;
 
 import '../../models/transaction.dart';
 import '../../utils/constants.dart';
@@ -29,6 +30,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   late String _type; // 'Debit' or 'Credit'
   late String _category;
+  late String _account;
   late DateTime _date;
 
   bool get _isEdit => widget.existing != null;
@@ -47,6 +49,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
     _type = t != null ? (t.debit > 0 ? 'Debit' : 'Credit') : 'Debit';
     _category = t?.category ?? vm.defaultCategory;
+    _account = t?.account ?? (vm.accounts.isNotEmpty ? vm.accounts.first : 'Canara Bank');
     _date = t?.date ?? DateTime.now();
   }
 
@@ -66,6 +69,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final validCategory = vm.categories.contains(_category)
         ? _category
         : vm.defaultCategory;
+    final validAccount = vm.accounts.contains(_account) ? _account : (vm.accounts.isNotEmpty ? vm.accounts.first : 'Canara Bank');
     final now = DateTime.now();
     final effectiveDate = DateTime(
       _date.year,
@@ -87,11 +91,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         credit: _type == 'Credit' ? amount : 0.0,
         type: _type,
         category: validCategory,
+        account: validAccount,
         balance: 0.0,
       );
       await vm.updateTransaction(widget.existing!.id, updated);
 
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -112,10 +118,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         balance: 0.0,
         type: _type,
         category: validCategory,
+        account: validAccount,
       );
       await vm.addTransaction(t);
 
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           LiquidGlassSnackBar(
             context: context,
@@ -382,23 +390,122 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 20),
 
-                // Submit button
-                ElevatedButton(
-                  onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: Text(
-                    _isEdit ? 'Save Changes' : 'Add Transaction',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                // Account
+                const _SectionLabel('Account'),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 100,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: vm.accounts.length,
+                    itemBuilder: (context, index) {
+                      final account = vm.accounts[index];
+                      final isSelected = account == _account;
+                      final accountBalance = vm.getAccountBalance(account);
+                      return GestureDetector(
+                        onTap: () => setState(() => _account = account),
+                        child: Container(
+                          width: 140,
+                          margin: const EdgeInsets.only(right: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? AppConstants.primaryPurple.withAlpha(50)
+                                : Theme.of(context).colorScheme.surface,
+                            border: Border.all(
+                              color: isSelected
+                                  ? AppConstants.primaryPurple
+                                  : Colors.grey.withAlpha(80),
+                              width: isSelected ? 2 : 1,
+                            ),
+                            borderRadius: BorderRadius.circular(AppConstants.borderRadiusMedium),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.account_balance_wallet_outlined,
+                                color: isSelected ? AppConstants.primaryPurple : Colors.grey,
+                              ),
+                              const Spacer(),
+                              Text(
+                                account,
+                                style: TextStyle(
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  color: Theme.of(context).colorScheme.onSurface,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                vm.balanceVisible ? Formatters.currency(accountBalance) : '₹ •••••',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.onSurface.withAlpha(200),
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
+                const SizedBox(height: 80), // Extra space for FAB
               ],
+            ),
+          ),
+        ),
+      ),
+      floatingActionButton: Theme(
+        data: Theme.of(context).copyWith(
+          floatingActionButtonTheme: const FloatingActionButtonThemeData(
+            elevation: 0,
+            hoverElevation: 0,
+            focusElevation: 0,
+            highlightElevation: 0,
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppConstants.incomeGreen.withOpacity(0.4),
+                blurRadius: 15,
+                spreadRadius: 2,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: BackdropFilter(
+              filter: dart_ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                color: AppConstants.incomeGreen.withOpacity(0.3),
+              child: Theme(
+                data: Theme.of(context).copyWith(
+                  splashColor: AppConstants.incomeGreen.withOpacity(0.5),
+                  highlightColor: Colors.transparent,
+                ),
+                child: FloatingActionButton(
+                  onPressed: _submit,
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  hoverElevation: 0,
+                  focusElevation: 0,
+                  highlightElevation: 0,
+                  splashColor: AppConstants.incomeGreen.withOpacity(0.5),
+                  child: const Icon(Icons.check, color: Colors.white, size: 28),
+                ),
+                ),
+              ),
             ),
           ),
         ),
