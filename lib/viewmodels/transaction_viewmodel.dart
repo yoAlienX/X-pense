@@ -16,6 +16,10 @@ class TransactionViewModel extends ChangeNotifier {
   List<Transaction> _allTransactions = [];
   List<Transaction> _filteredTransactions = [];
 
+  // Cached sorted filtered data
+  List<Transaction> _sortedIncomeTransactions = [];
+  List<Transaction> _sortedExpenseTransactions = [];
+
   // UI State
   FilterState _filterState = FilterState(
     monthFilter: AppConstants.monthNames[DateTime.now().month],
@@ -39,6 +43,10 @@ class TransactionViewModel extends ChangeNotifier {
   List<Transaction> get allTransactions => List.unmodifiable(_allTransactions);
   List<Transaction> get filteredTransactions =>
       List.unmodifiable(_filteredTransactions);
+  List<Transaction> get sortedIncomeTransactions =>
+      List.unmodifiable(_sortedIncomeTransactions);
+  List<Transaction> get sortedExpenseTransactions =>
+      List.unmodifiable(_sortedExpenseTransactions);
   List<Transaction> get paginatedTransactions {
     if (_filteredTransactions.length <= _displayLimit) {
       return List.unmodifiable(_filteredTransactions);
@@ -594,6 +602,7 @@ class TransactionViewModel extends ChangeNotifier {
 
     if (hasDefaultFilters) {
       _filteredTransactions = _allTransactions;
+      _updateCachedSortedLists();
       return;
     }
 
@@ -629,6 +638,18 @@ class TransactionViewModel extends ChangeNotifier {
 
       return true;
     }).toList();
+
+    _updateCachedSortedLists();
+  }
+
+  void _updateCachedSortedLists() {
+    _sortedIncomeTransactions =
+        _filteredTransactions.where((t) => t.credit > 0).toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+
+    _sortedExpenseTransactions =
+        _filteredTransactions.where((t) => t.debit > 0).toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
   }
 
   int _getMonthIndex(String monthName) {

@@ -1181,16 +1181,11 @@ class _HomeScreenState extends State<HomeScreen> {
     TransactionViewModel vm,
     bool isIncome,
   ) {
-    final txs =
-        vm.filteredTransactions
-            .where((t) => isIncome ? t.credit > 0 : t.debit > 0)
-            .toList()
-          ..sort((a, b) => b.date.compareTo(a.date));
+    final txs = isIncome
+        ? vm.sortedIncomeTransactions
+        : vm.sortedExpenseTransactions;
 
-    final totalAmount = txs.fold<double>(
-      0.0,
-      (sum, t) => sum + (isIncome ? t.credit : t.debit),
-    );
+    final totalAmount = isIncome ? vm.totalIncome : vm.totalExpense;
 
     final accent = isIncome
         ? AppConstants.incomeGreen
